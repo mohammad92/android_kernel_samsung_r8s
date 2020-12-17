@@ -325,7 +325,7 @@ ARCH		?= arm64
 UTS_MACHINE 	:= $(ARCH)
 SRCARCH 	:= $(ARCH)
 
-CROSS_COMPILE := $(srctree)/toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+CROSS_COMPILE ?= $(srctree)/toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/aarch64-linux-android-
 #CC := $(srctree)/toolchain/clang/host/linux-x86/clang-r349610-jopp/bin/clang
 #CLANG_TRIPLE :=$(srctree)/toolchain/clang/host/linux-x86/clang-r349610-jopp/bin/aarch64-linux-gnu-
 
@@ -374,7 +374,7 @@ KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 # Make variables (CC, etc...)
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
-CC		= $(srctree)/toolchain/clang/host/linux-x86/clang-r349610-jopp/bin/clang
+CC		?= $(srctree)/toolchain/clang/host/linux-x86/clang-r349610-jopp/bin/clang
 CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
