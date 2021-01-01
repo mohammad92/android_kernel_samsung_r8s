@@ -2,12 +2,12 @@
 /*
  *  usb notify header
  *
- * Copyright (C) 2011-2017 Samsung, Inc.
+ * Copyright (C) 2011-2020 Samsung, Inc.
  * Author: Dongrak Shin <dongrak.shin@samsung.com>
  *
  */
 
- /* usb notify layer v3.4 */
+ /* usb notify layer v3.5 */
 
 #ifndef __LINUX_USB_NOTIFY_H__
 #define __LINUX_USB_NOTIFY_H__
@@ -45,6 +45,7 @@ enum otg_notify_events {
 	NOTIFY_EVENT_SMSC_OVC,
 	NOTIFY_EVENT_SMTD_EXT_CURRENT,
 	NOTIFY_EVENT_MMD_EXT_CURRENT,
+	NOTIFY_EVENT_HMD_EXT_CURRENT,
 	NOTIFY_EVENT_DEVICE_CONNECT,
 	NOTIFY_EVENT_GAMEPAD_CONNECT,
 	NOTIFY_EVENT_LANHUB_CONNECT,
@@ -129,6 +130,7 @@ enum usb_certi_type {
 	USB_CERTI_HUB_DEPTH_EXCEED,
 	USB_CERTI_HUB_POWER_EXCEED,
 	USB_CERTI_HOST_RESOURCE_EXCEED,
+	USB_CERTI_WARM_RESET,
 };
 
 enum usb_err_type {
@@ -179,7 +181,7 @@ struct otg_booster {
 	int (*booster)(bool enable);
 };
 
-#ifdef CONFIG_USB_NOTIFY_LAYER
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
 extern const char *event_string(enum otg_notify_events event);
 extern const char *status_string(enum otg_notify_event_status status);
 extern void send_usb_mdm_uevent(void);

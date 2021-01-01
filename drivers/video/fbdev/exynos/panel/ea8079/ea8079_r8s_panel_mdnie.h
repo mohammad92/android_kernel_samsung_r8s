@@ -1537,7 +1537,7 @@ static unsigned char r8s_sensor_rgb_table[][3] = {
 	{ 0xff, 0xff, 0xff },
 };
 
-static unsigned char r8s_night_mode_table[EA8079_R8S_MAX_NIGHT_MODE][MAX_NIGHT_LEVEL][EA8079_NIGHT_MODE_LEN] = {
+static unsigned char r8s_night_mode_table[EA8079_R8S_MAX_NIGHT_MODE][EA8079_R8S_MAX_NIGHT_LEVEL][EA8079_NIGHT_MODE_LEN] = {
 	{
 		{ 0xff, 0x00, 0x00, 0x00, 0xf9, 0x00, 0x00, 0x00, 0xee, 0x00, 0xf9, 0xee, 0xff, 0x00, 0xee, 0xff, 0xf9, 0x00, 0xff, 0xf9, 0xee }, /* 6500K */
 		{ 0xff, 0x00, 0x00, 0x00, 0xf7, 0x00, 0x00, 0x00, 0xe6, 0x00, 0xf7, 0xe6, 0xff, 0x00, 0xe6, 0xff, 0xf7, 0x00, 0xff, 0xf7, 0xe6 }, /* 6300K */
@@ -2107,7 +2107,7 @@ static struct maptbl r8s_mdnie_maptbl[MAX_MDNIE_MAPTBL][NR_EA8079_MDNIE_REG] = {
 		DEFINE_MAPTBL("night_2", (u8 *)r8s_mdnie_night_table + EA8079_MDNIE_2_OFS, 1, 1, EA8079_MDNIE_LEN, EA8079_MDNIE_2_LEN,
 				init_common_table, getidx_common_maptbl, copy_common_maptbl),
 		DEFINE_MAPTBL("night_3", (u8 *)r8s_mdnie_night_table + EA8079_MDNIE_3_OFS, 1, 1, EA8079_MDNIE_LEN, EA8079_MDNIE_3_LEN,
-				init_mdnie_night_mode_table, getidx_common_maptbl, copy_common_maptbl),
+				init_common_table, getidx_common_maptbl, copy_common_maptbl),
 		DEFINE_MAPTBL("night_4", (u8 *)r8s_mdnie_night_table + EA8079_MDNIE_4_OFS, 1, 1, EA8079_MDNIE_LEN, EA8079_MDNIE_4_LEN,
 				init_common_table, getidx_common_maptbl, copy_common_maptbl),
 		DEFINE_MAPTBL("night_5", (u8 *)r8s_mdnie_night_table + EA8079_MDNIE_5_OFS, 1, 1, EA8079_MDNIE_LEN, EA8079_MDNIE_5_LEN,

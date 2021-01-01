@@ -561,6 +561,7 @@ int _decon_tui_protection(bool tui_en)
 				decon->bts.total_bw);
 #endif
 	} else {
+		decon->win_up.force_full = true;
 		aclk_khz = v4l2_subdev_call(decon->out_sd[0], core, ioctl,
 				EXYNOS_DPU_GET_ACLK, NULL) / 1000U;
 		decon_info("%s:DPU_ACLK(%ld khz)\n", __func__, aclk_khz);
@@ -859,7 +860,6 @@ static int decon_doze(struct decon_device *decon)
 
 retry_enable:
 	decon_info("decon-%d %s +\n", decon->id, __func__);
-
 	ret = _decon_enable(decon, next_state);
 	if (ret < 0) {
 		decon_err("decon-%d failed to set %s (ret %d)\n",
@@ -1181,6 +1181,23 @@ int decon_update_pwr_state(struct decon_device *decon, enum disp_pwr_mode mode)
 	}
 
 #if defined(CONFIG_EXYNOS_DISPLAYPORT)
+	if (mode == DISP_PWR_NORMAL && decon->dt.out_type == DECON_OUT_DP) {
+		struct decon_device *decon0 = get_decon_drvdata(0);
+		const int max_wait = 100;
+		int wait_cnt = 0;
+
+		if (decon0) {
+			while (decon0->state == DECON_STATE_TUI && wait_cnt++ < max_wait)
+				msleep(20);
+
+			if (wait_cnt >= max_wait) {
+				decon_err("Displayport: tui close timeout\n");
+				goto out;
+			} else if (wait_cnt) {
+				decon_warn("Displayport: tui close wait(%dms)\n", wait_cnt * 20);
+			}
+		}
+	}
 	if (mode == DISP_PWR_OFF && decon->dt.out_type == DECON_OUT_DP
 			&& IS_DISPLAYPORT_HPD_PLUG_STATE()) {
 		if (IS_DISPLAYPORT_SST_HPD_PLUG_STATE(displayport_get_sst_id_with_decon_id(decon->id))) {
@@ -2968,7 +2985,6 @@ static void decon_update_regs(struct decon_device *decon,
 	struct dsim_device *dsim;
 #endif
 	int i, j, err;
-	bool winup_rollback = false;
 #ifdef CONFIG_PROFILE_WINCONFIG
 	s64 update_time;
 	s64 hiber_time;
@@ -3015,7 +3031,7 @@ static void decon_update_regs(struct decon_device *decon,
 			if (err <= 0) {
 				decon_save_cur_buf_info(decon, regs);
 				decon_wait_for_vsync(decon, VSYNC_TIMEOUT_MSEC);
-				winup_rollback = true;
+				decon->win_up.force_full = true;
 				goto fence_err;
 			}
 		}
@@ -3030,7 +3046,7 @@ static void decon_update_regs(struct decon_device *decon,
 			if (err <= 0) {
 				decon_save_cur_buf_info(decon, regs);
 				decon_wait_for_vsync(decon, VSYNC_TIMEOUT_MSEC);
-				winup_rollback = true;
+				decon->win_up.force_full = true;
 				goto fence_err;
 			}
 		}
@@ -3062,7 +3078,7 @@ static void decon_update_regs(struct decon_device *decon,
 			decon_reg_set_trigger(decon->id, &psr, DECON_TRIG_DISABLE);
 		decon_save_cur_buf_info(decon, regs);
 		decon_wait_for_vsync(decon, VSYNC_TIMEOUT_MSEC);
-		winup_rollback = true;
+		decon->win_up.force_full = true;
 		goto fence_err;
 	}
 
@@ -3234,13 +3250,6 @@ end:
 #endif
 
 fence_err:
-	/* rollback partial update region */
-	if (decon->win_up.enabled && winup_rollback) {
-		memcpy(&decon->win_up.prev_up_region,
-				&decon->win_up.back_up_region,
-				sizeof(struct decon_rect));
-	}
-
 	decon_release_old_bufs(decon, regs, old_dma_bufs, old_plane_cnt, import_cnt, import_time);
 #ifdef CONFIG_EXYNOS_SET_ACTIVE_WITH_EMPTY_WINDOW
 	if (!(regs->dpp_config[DECON_WIN_UPDATE_IDX].state &
@@ -3673,6 +3682,7 @@ static int decon_set_win_config(struct decon_device *decon,
 		num_of_window = decon_get_active_win_count(decon, win_data, &readback_req);
 		if (readback_req) {
 			readback_fence = decon_create_fence(decon, &sync_ofile);
+			win_data->config[decon->dt.wb_win].acq_fence = readback_fence;
 			if (readback_fence < 0)
 				goto err;
 			fd_install(readback_fence, sync_ofile->file);
@@ -3704,6 +3714,7 @@ static int decon_set_win_config(struct decon_device *decon,
 #if defined(CONFIG_EXYNOS_SUPPORT_READBACK)
 		if (readback_req) {
 			regs->readback.request = readback_req;
+			decon->win_up.force_full = true;
 			readback_fence = decon_create_fence(decon, &sync_ofile);
 			win_data->config[decon->dt.wb_win].acq_fence = readback_fence;
 			if (readback_fence < 0)
@@ -3741,12 +3752,7 @@ static int decon_set_win_config(struct decon_device *decon,
 	 * If dpu_prepare_win_update_config returns error, prev_up_region is
 	 * updated but that partial size is not applied to HW in previous code.
 	 * So, updating prev_up_region is moved here.
-	 *
-	 * back_up_region is used for rollback in situations where
-	 * dpu_set_win_update_config(real HW change) cannot be performed.
 	 */
-	memcpy(&decon->win_up.back_up_region, &decon->win_up.prev_up_region,
-			sizeof(struct decon_rect));
 	memcpy(&decon->win_up.prev_up_region, &regs->up_region,
 			sizeof(struct decon_rect));
 
@@ -4399,10 +4405,11 @@ static int decon_ioctl(struct fb_info *info, unsigned int cmd,
 		}
 		break;
 
+	case EXYNOS_GET_DISPLAY_MODE_OLD:
 	case EXYNOS_GET_DISPLAY_MODE:
 		if (copy_from_user(&display_mode,
-				   (struct exynos_display_mode __user *)arg,
-				   sizeof(display_mode))) {
+				   (void __user *)arg,
+				   _IOC_SIZE(cmd))) {
 			ret = -EFAULT;
 			break;
 		}
@@ -4421,8 +4428,8 @@ static int decon_ioctl(struct fb_info *info, unsigned int cmd,
 				display_mode.index, mode->width, mode->height,
 				mode->fps, mode->mm_width, mode->mm_height);
 
-		if (copy_to_user((struct exynos_display_mode __user *)arg,
-					&display_mode, sizeof(display_mode))) {
+		if (copy_to_user((void __user *)arg,
+					&display_mode, _IOC_SIZE(cmd))) {
 			ret = -EFAULT;
 			break;
 		}

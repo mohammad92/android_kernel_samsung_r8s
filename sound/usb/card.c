@@ -700,6 +700,9 @@ static int usb_audio_probe(struct usb_interface *intf,
 		}
 	}
 	dev_set_drvdata(&dev->dev, chip);
+#ifdef CONFIG_USB_AUDIO_ENHANCED_DETECT_TIME
+	send_usb_audio_uevent(dev, chip->card->number, 1);
+#endif
 
 	/*
 	 * For devices with more than one control interface, we assume the

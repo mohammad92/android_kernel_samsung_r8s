@@ -527,6 +527,17 @@ err:
 	return ret;
 }
 
+static u8 decon_edid_get_checksum(const u8 *raw_edid)
+{
+	int i;
+	u8 csum = 0;
+
+	for (i = 0; i < EDID_BLOCK_SIZE; i++)
+		csum += raw_edid[i];
+
+	return csum;
+}
+
 void decon_get_edid(struct decon_device *decon, struct decon_edid_data *edid_data)
 {
 	struct edid edid;
@@ -546,9 +557,15 @@ void decon_get_edid(struct decon_device *decon, struct decon_edid_data *edid_dat
 	 */
 	edid.mfg_id[0] = 0x4C;    // manufacturer ID for samsung
 	edid.mfg_id[1] = 0x2D;
+	edid.mfg_week = 0x10;	/* 16 week */
+	edid.mfg_year = 0x1E;	/* 1990 + 30 = 2020 year */
 	edid.detailed_timings[0].data.other_data.type = 0xfc;  // for display name
 	memcpy(edid.detailed_timings[0].data.other_data.data.str.str, edid_display_name, 13);
-	edid.checksum = 0x0;
+	/* sum of all 128 bytes should equal 0 (mod 0x100) */
+	edid.checksum = 0x100 - decon_edid_get_checksum((const u8 *)&edid);
+
+	decon_info("%s: checksum(0x%x)\n", __func__,
+			decon_edid_get_checksum((const u8 *)&edid));
 
 	memcpy(edid_data->edid_data, &edid, EDID_BLOCK_SIZE);
 	edid_data->size = EDID_BLOCK_SIZE;
@@ -2134,7 +2151,9 @@ out:
  */
 void dpu_pll_sleep_mask(struct decon_device *decon)
 {
-	if (!decon)
+	if (decon == NULL)
+		return;
+	if (decon->state == DECON_STATE_TUI)
 		return;
 
 	if (decon->dt.psr_mode == DECON_MIPI_COMMAND_MODE &&
@@ -2142,7 +2161,7 @@ void dpu_pll_sleep_mask(struct decon_device *decon)
 		if (IS_DECON_ON_STATE(decon)) {
 			decon_reg_set_pll_wakeup(decon->id, 1);
 			udelay(18 * decon->lcd_info->dphy_pms.p);
-			decon_info("%s +\n", __func__);
+			decon_dbg("%s +\n", __func__);
 		}
 	}
 }
@@ -2154,15 +2173,16 @@ void dpu_pll_sleep_mask(struct decon_device *decon)
  */
 void dpu_pll_sleep_unmask(struct decon_device *decon)
 {
-	
-	if (!decon)
+	if (decon == NULL)
 		return;
+	if (decon->state == DECON_STATE_TUI)
+                return;
 
 	if (decon->dt.psr_mode == DECON_MIPI_COMMAND_MODE &&
 			decon->dt.dsi_mode != DSI_MODE_DUAL_DSI) {
 		if (IS_DECON_ON_STATE(decon)) {
 			decon_reg_set_pll_wakeup(decon->id, 0);
-			decon_info("%s +\n", __func__);
+			decon_dbg("%s +\n", __func__);
 		}
 	}
 }

@@ -646,11 +646,11 @@ int dd_sec_crypt_bio_pages(struct dd_info *info, struct bio *orig,
 	return 0;
 }
 
-void dd_hex_key_dump(const char* tag, uint8_t *data, size_t data_len)
+void dd_hex_key_dump(const char* tag, uint8_t *data, unsigned int data_len)
 {
 	static const char *hex = "0123456789ABCDEF";
 	static const char delimiter = ' ';
-	int i;
+	unsigned int i;
 	char *buf;
 	size_t buf_len;
 

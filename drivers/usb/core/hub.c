@@ -5443,7 +5443,7 @@ static void port_event(struct usb_hub *hub, int port1)
 	if (hub_port_warm_reset_required(hub, port1, portstatus)) {
 		dev_dbg(&port_dev->dev, "do warm reset\n");
 #if defined(CONFIG_USB_HOST_CERTI)
-		send_usb_certi_uevent(USB_CERTI_NO_RESPONSE);
+		send_usb_certi_uevent(USB_CERTI_WARM_RESET);
 #endif
 		if (!udev || !(portstatus & USB_PORT_STAT_CONNECTION)
 				|| udev->state == USB_STATE_NOTATTACHED) {

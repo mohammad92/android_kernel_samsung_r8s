@@ -2717,15 +2717,6 @@ static int panel_seq_display_mode(struct panel_device *panel)
 	if (!check_display_mode_cond(panel))
 		return -EINVAL;
 
-	/*
-	 * applying display mode is permitted in normal state
-	 */
-	if (panel->state.cur_state != PANEL_STATE_NORMAL) {
-		panel_warn("could not change display mode in %s state\n",
-				panel_state_names[panel->state.cur_state]);
-		return 0;
-	}
-
 	ret = panel_do_seqtbl_by_index_nolock(panel,
 			PANEL_DISPLAY_MODE_SEQ);
 	if (unlikely(ret < 0)) {

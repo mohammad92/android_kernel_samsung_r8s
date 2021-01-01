@@ -905,7 +905,7 @@ static void csi_err_print(struct is_device_csi *csi)
 				is_sec_copy_err_cnt_to_file();
 #endif
 #endif
-				exynos_bcm_dbg_stop(CAMERA_DRIVER);
+				exynos_bcm_dbg_stop(PANIC_HANDLE);
 
 				is_debug_s2d(false, "[DMA%d][VC P%d, L%d] CSIS error!! %s",
 					csi->dma_subdev[vc]->dma_ch[csi->scm],
@@ -2133,8 +2133,11 @@ static int csi_stream_on(struct v4l2_subdev *subdev,
 		}
 	}
 
-	/* if sensor's output otf was enabled, enable line irq */
-	if (!test_bit(IS_SENSOR_OTF_OUTPUT, &device->state)) {
+	/*
+	 * A csis line interrupt does not used any more in actual scenario.
+	 * But it can be used for debugging.
+	 */
+	if (unlikely(debug_csi >= 5)) {
 		/* update line_fcount for sensor_notify_by_line */
 		device->line_fcount = atomic_read(&csi->fcount) + 1;
 		minfo("[CSI%d] start line irq cnt(%d)\n", csi, csi->ch, device->line_fcount);
@@ -2225,7 +2228,7 @@ static int csi_stream_off(struct v4l2_subdev *subdev,
 	atomic_dec(&csi_dma->rcount);
 	spin_unlock(&csi_dma->barrier);
 
-	if (!test_bit(IS_SENSOR_OTF_OUTPUT, &device->state))
+	if (csi->tasklet_csis_line.func)
 		tasklet_kill(&csi->tasklet_csis_line);
 
 	if (test_bit(CSIS_DMA_ENABLE, &csi->state)) {

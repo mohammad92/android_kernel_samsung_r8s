@@ -472,6 +472,7 @@ static int mfc_enc_s_fmt_vid_cap_mplane(struct file *file, void *priv,
 		return -EINVAL;
 	}
 	ctx->dst_fmt = fmt;
+
 	ctx->codec_mode = ctx->dst_fmt->codec_mode;
 	mfc_info_ctx("[STREAM] Enc dst codec(%d) : %s\n",
 			ctx->codec_mode, ctx->dst_fmt->name);
@@ -627,7 +628,8 @@ static int mfc_enc_s_fmt_vid_out_mplane(struct file *file, void *priv,
 		mfc_err_ctx("Unsupported format for source\n");
 		return -EINVAL;
 	}
-    ctx->src_fmt = fmt;
+	ctx->src_fmt = fmt;
+
 	if (ctx->src_fmt->mem_planes != pix_fmt_mp->num_planes) {
 		mfc_err_ctx("[FRAME] enc src plane number is different (%d != %d)\n",
 				ctx->src_fmt->mem_planes, pix_fmt_mp->num_planes);
@@ -864,13 +866,13 @@ static int mfc_enc_qbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 
 	if (buf->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		mfc_debug(4, "enc src buf[%d] Q\n", buf->index);
-		
 		if (ctx->src_fmt->mem_planes != buf->length) {
 			mfc_err_ctx("number of memory container miss-match "
 					"between Src planes(%d) and buffer length(%d)\n",
 					ctx->src_fmt->mem_planes, buf->length);
 			return -EINVAL;
 		}
+
 		for (i = 0; i < ctx->src_fmt->mem_planes; i++) {
 			if (!buf->m.planes[i].bytesused) {
 				mfc_debug(2, "[FRAME] enc src[%d] size zero, "
@@ -911,12 +913,12 @@ static int mfc_enc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 		mfc_err_ctx("Call on DQBUF after unrecoverable error\n");
 		return -EIO;
 	}
-	
+
 	if (!V4L2_TYPE_IS_MULTIPLANAR(buf->type)) {
 		mfc_err_ctx("Invalid V4L2 Buffer for driver: type(%d)\n", buf->type);
 		return -EINVAL;
 	}
-	
+
 	if (buf->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		mfc_debug(4, "enc src buf[%d] DQ\n", buf->index);
 		ret = vb2_dqbuf(&ctx->vq_src, buf, file->f_flags & O_NONBLOCK);
@@ -941,6 +943,7 @@ static int mfc_enc_streamon(struct file *file, void *priv,
 		mfc_info_ctx("[OTF] skip streamon\n");
 		return 0;
 	}
+
 	if (!V4L2_TYPE_IS_MULTIPLANAR(type)) {
 		mfc_err_ctx("Invalid V4L2 Buffer for driver: type(%d)\n", type);
 		return -EINVAL;

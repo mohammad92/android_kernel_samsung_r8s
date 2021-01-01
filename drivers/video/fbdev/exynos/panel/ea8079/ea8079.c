@@ -1614,3 +1614,11 @@ static int init_gamma_mtp_all_table(struct maptbl *tbl)
 	return init_gamma_mtp_table(tbl);
 }
 #endif
+
+static bool is_panel_state_not_lpm(struct panel_device *panel)
+{
+	if (panel->state.cur_state != PANEL_STATE_ALPM)
+		return true;
+
+	return false;
+}

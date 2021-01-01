@@ -2194,7 +2194,7 @@ int is_sensor_peri_s_stream(struct is_device_sensor *device,
 		}
 
 		if (sensor_peri->flash != NULL) {
-			if (dual_info->mode == IS_DUAL_MODE_NOTHING) {
+			if (device->use_standby == 0) {
 				sensor_peri->flash->flash_data.mode = CAM2_FLASH_MODE_OFF;
 				sensor_peri->flash->flash_data.high_resolution_flash = false;
 				if (sensor_peri->flash->flash_data.flash_fired == true) {

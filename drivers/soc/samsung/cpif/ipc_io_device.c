@@ -259,15 +259,15 @@ static long ipc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		mif_info("IOCTL_SET_IP_PACKET_FILTERS\n");
 
-		filter_arg = kzalloc(sizeof(struct packet_filter), GFP_KERNEL);
+		filter_arg = kvzalloc(sizeof(struct packet_filter), GFP_KERNEL);
 		if (!filter_arg) {
-			mif_err("packet_filter devm_kzalloc fail\n");
+			mif_err("packet_filter kvzalloc fail\n");
 			return -EFAULT;
 		}
 
 		if (copy_from_user(filter_arg, (struct packet_filter __user *)arg, sizeof(struct packet_filter))) {
 			mif_err("copy_from_user fail - IOCTL_SET_IP_PACKET_FILTERS\n");
-			kfree(filter_arg);
+			kvfree(filter_arg);
 			return -EFAULT;
 		}
 
@@ -275,7 +275,7 @@ static long ipc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		if (rmnet_type < RMNET_COUNT) {
 			if (filter_arg->filters_count != 0) {
-				memcpy(&ld->packet_filter_table.rmnet[rmnet_type], &filter_arg, sizeof(struct packet_filter));
+				memcpy(&ld->packet_filter_table.rmnet[rmnet_type], filter_arg, sizeof(struct packet_filter));
 				ld->is_modern_standby = true;
 			} else {
 				memset(&ld->packet_filter_table.rmnet[rmnet_type], 0, sizeof(struct packet_filter));
@@ -283,10 +283,10 @@ static long ipc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			}
 		} else {
 			mif_err("Unknow CID: %d\n", filter_arg->cid);
-			kfree(filter_arg);
+			kvfree(filter_arg);
 			return -EFAULT;
 		}
-		kfree(filter_arg);
+		kvfree(filter_arg);
 		break;
 	}
 
@@ -297,15 +297,15 @@ static long ipc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		mif_info("IOCTL_GET_IP_PACKET_FILTERS\n");
 
-		filter_arg = kzalloc(sizeof(struct packet_filter), GFP_KERNEL);
+		filter_arg = kvzalloc(sizeof(struct packet_filter), GFP_KERNEL);
 		if (!filter_arg) {
-			mif_err("packet_filter devm_kzalloc fail\n");
+			mif_err("packet_filter kvzalloc fail\n");
 			return -EFAULT;
 		}
 
 		if (copy_from_user(filter_arg, (struct packet_filter __user *)arg, sizeof(struct packet_filter))) {
 			mif_err("copy_from_user fail - IOCTL_GET_IP_PACKET_FILTERS\n");
-			kfree(filter_arg);
+			kvfree(filter_arg);
 			return -EFAULT;
 		}
 
@@ -314,15 +314,15 @@ static long ipc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (rmnet_type < RMNET_COUNT) {
 			if (copy_to_user((void __user *)arg, &ld->packet_filter_table.rmnet[rmnet_type], sizeof(struct packet_filter))) {
 				mif_err("copy_to_user fail - IOCTL_GET_IP_PACKET_FILTERS\n");
-				kfree(filter_arg);
+				kvfree(filter_arg);
 				return -EFAULT;
 			}
 		} else {
 			mif_err("Unknow CID: %d\n", filter_arg->cid);
-			kfree(filter_arg);
+			kvfree(filter_arg);
 			return -EFAULT;
 		}
-		kfree(filter_arg);
+		kvfree(filter_arg);
 		break;
 	}
 

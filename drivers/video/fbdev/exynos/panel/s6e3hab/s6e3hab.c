@@ -3754,6 +3754,14 @@ static void show_self_mask_crc(struct dumpinfo *info)
 	panel_info("====================================================\n");
 }
 
+static bool is_panel_state_not_lpm(struct panel_device *panel)
+{
+	if (panel->state.cur_state != PANEL_STATE_ALPM)
+		return true;
+
+	return false;
+}
+
 #ifdef CONFIG_PANEL_VRR_BRIDGE
 #define S6E3HAB_HUBBLE_ARR_MIN_LUMINANCE (11)
 #define S6E3HAB_HUBBLE_ARR_MAX_LUMINANCE (S6E3HAB_HUBBLE_TARGET_LUMINANCE)
@@ -3786,4 +3794,3 @@ static bool s6e3hab_hubble_bridge_refresh_rate_changeable(struct panel_device *p
 	return changeable;
 }
 #endif
-

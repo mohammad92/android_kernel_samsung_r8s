@@ -220,11 +220,11 @@ static int update_profile_te(struct profiler_device *p, s64 time_us)
 
 	te_info->last_diff = time_us - te_info->last_time;
 	te_info->last_time = time_us;
-	spin_unlock(&te_info->slock);
 
 	prof_info(p, te_debug, "last time: %lld, diff: %lld\n", te_info->last_time, te_info->last_diff);
 	te_info->times[te_info->idx++] = te_info->last_diff;
 	te_info->idx = te_info->idx % MAX_TE_CNT;
+	spin_unlock(&te_info->slock);
 
 	return ret;
 }
@@ -303,7 +303,6 @@ static int print_cmdlog(struct profiler_device *p)
 {
 	struct profiler_cmdlog_data *c;
 	int h, t;
-	s64 time = 0;
 	u32 tmp;
 	bool dir_read, dir_write;
 
@@ -333,16 +332,11 @@ static int print_cmdlog(struct profiler_device *p)
 			//panel log print
 			tmp = PROFILER_DATALOG_MASK_SUB(c->pkt_type);
 			if (tmp == PROFILER_DATALOG_PANEL_CMD_FLUSH_START) {
-				time = c->time;
 				prof_info(p, cmdlog_disp, "cmdlog[%d] PANEL_LOG FLUSH_START cmdcnt %d, payload %d, time %lld\n",
 					t, c->cmd, c->size, c->time);
 			} else if (tmp == PROFILER_DATALOG_PANEL_CMD_FLUSH_END) {
-				if (time > 0)
-					time = c->time - time;
-				else
-					time = 0;
-				prof_info(p, cmdlog_disp, "cmdlog[%d] PANEL_LOG FLUSH_END cmdcnt %d, payload %d, elapsed: %lldus, time %lld\n",
-					t, c->cmd, c->size, time / 1000, c->time);
+				prof_info(p, cmdlog_disp, "cmdlog[%d] PANEL_LOG FLUSH_END cmdcnt %d, payload %d, elapsed: %lldus\n",
+					t, c->cmd, c->size, c->time / 1000);
 			}
 		}
 		t = (t + 1) % PROFILER_CMDLOG_SIZE;
@@ -1038,7 +1032,7 @@ static ssize_t prop_config_cmdlog_filter_store(struct device *dev,
 			panel_err("invalid value %s, ret %d\n", tok, ret);
 			return ret;
 		}
-		if (val < 0 || val >= ARRAY_SIZE(profiler_cmdlog_filter_list)) {
+		if (val >= ARRAY_SIZE(profiler_cmdlog_filter_list)) {
 			panel_err("invalid value %s, ret %d\n", tok, ret);
 			continue;
 		}

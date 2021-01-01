@@ -240,7 +240,7 @@ int dwc3_gadget_set_link_state(struct dwc3 *dwc, enum dwc3_link_state state)
 	return -ETIMEDOUT;
 }
 
-static void dwc3_gedget_link_state_print (struct dwc3 *dwc, char* fname)
+static void dwc3_gadget_link_state_print (struct dwc3 *dwc, char* fname)
 {
 	int i;
 	char buf[DWC3_LINK_STATE_LAST_INFO_MEM*5+1] = {0,};
@@ -249,7 +249,7 @@ static void dwc3_gedget_link_state_print (struct dwc3 *dwc, char* fname)
 		sprintf(buf+(i*5), "%02d > ",
 			dwc->linkstate_record[(dwc->linkstate_ai+i)%DWC3_LINK_STATE_LAST_INFO_MEM]);
 	}
-	dev_info(dwc->dev, "usb: %s (%s%s)\n", __func__, buf, fname);
+	pr_info("usb: %s (%s%s)\n", __func__, buf, fname);
 }
 
 /**
@@ -1960,7 +1960,7 @@ static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on, int suspend)
 
 		dwc->pullups_connected = true;
 	} else {
-		dwc3_gedget_link_state_print(dwc, "STOP");
+		dwc3_gadget_link_state_print(dwc, "STOP");
 		dwc3_gadget_disable_irq(dwc);
 		reg = dwc3_readl(dwc->regs, DWC3_DCTL);
 		reg &= ~DWC3_DCTL_ULSTCHNGREQ_MASK;
@@ -2067,7 +2067,7 @@ static int dwc3_gadget_run_stop_vbus(struct dwc3 *dwc, int is_on, int suspend)
 
 		dwc->pullups_connected = true;
 	} else {
-		dwc3_gedget_link_state_print(dwc, "STOP_VBUS");
+		dwc3_gadget_link_state_print(dwc, "STOP_VBUS");
 		dwc3_gadget_disable_irq(dwc);
 		dwc3_event_buffers_cleanup(dwc);
 		__dwc3_gadget_ep_disable(dwc->eps[1]);
@@ -2149,7 +2149,7 @@ static int dwc3_gadget_vbus_session(struct usb_gadget *g, int is_active)
 
 	is_active = !!is_active;
 
-	dev_info(dwc->dev, "%s: is_active = %d, softconnect = %d, vbus_session = %d\n",
+	pr_info("usb: %s: is_active = %d, softconnect = %d, vbus_session = %d\n",
 			__func__, is_active, dwc->softconnect, dwc->vbus_session);
 
 	spin_lock_irqsave(&dwc->lock, flags);
@@ -2248,7 +2248,7 @@ static int dwc3_gadget_pullup(struct usb_gadget *g, int is_on)
 
 	spin_lock_irqsave(&dwc->lock, flags);
 
-	dev_info(dwc->dev, "%s: pullup = %d, vbus = %d\n",
+	pr_info("usb: %s: pullup = %d, vbus = %d\n",
 			__func__, is_on, dwc->vbus_session);
 	if (is_on == dwc->softconnect) {
 		dev_info(dwc->dev, "pullup is already %s\n",
@@ -2306,7 +2306,7 @@ static int dwc3_gadget_pullup(struct usb_gadget *g, int is_on)
 	} else {
 		if (is_on)
 			store_usblog_notify(NOTIFY_USBSTATE,
-						(void *)"USB_STATE=PULLUP:DIS:FAIL", NULL);
+						(void *)"USB_STATE=PULLUP:EN:FAIL", NULL);
 		else
 			store_usblog_notify(NOTIFY_USBSTATE,
 						(void *)"USB_STATE=PULLUP:DIS:FAIL", NULL);
@@ -3686,12 +3686,12 @@ static void dwc3_gadget_interrupt(struct dwc3 *dwc,
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 		dwc3_gadget_cable_connect(dwc, false);
 #endif
-		dev_info(dwc->dev, "usb: %s DISCONNECT\n", __func__);
+		pr_info("usb: %s DISCONNECT\n", __func__);
 		dwc3_gadget_disconnect_interrupt(dwc);
 		break;
 	case DWC3_DEVICE_EVENT_RESET:
-		dev_info(dwc->dev, "usb: %s RESET\n", __func__);
-		dwc3_gedget_link_state_print(dwc, "RESET");
+		pr_info("usb: %s RESET\n", __func__);
+		dwc3_gadget_link_state_print(dwc, "RESET");
 		dwc3_gadget_reset_interrupt(dwc);
 #ifdef CONFIG_USB_NOTIFY_PROC_LOG
 		if (dwc->gadget.speed == USB_SPEED_FULL)

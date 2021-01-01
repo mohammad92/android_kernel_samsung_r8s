@@ -598,7 +598,7 @@ static int mfc_dec_s_fmt_vid_cap_mplane(struct file *file, void *priv,
 {
 	struct mfc_ctx *ctx = fh_to_mfc_ctx(file->private_data);
 	struct v4l2_pix_format_mplane *pix_fmt_mp = &f->fmt.pix_mp;
-    struct mfc_fmt *fmt = NULL;
+	struct mfc_fmt *fmt = NULL;
 
 	mfc_debug_enter();
 
@@ -608,7 +608,7 @@ static int mfc_dec_s_fmt_vid_cap_mplane(struct file *file, void *priv,
 	}
 
 	fmt = __mfc_dec_find_format(ctx, pix_fmt_mp->pixelformat);
-	if (!fmt) {	
+	if (!fmt) {
 		mfc_err_ctx("Unsupported format for destination\n");
 		return -EINVAL;
 	}
@@ -675,6 +675,7 @@ static int mfc_dec_s_fmt_vid_out_mplane(struct file *file, void *priv,
 		return -EINVAL;
 	}
 	ctx->src_fmt = fmt;
+
 	ctx->codec_mode = ctx->src_fmt->codec_mode;
 	mfc_info_ctx("[STREAM] Dec src codec(%d): %s\n",
 			ctx->codec_mode, ctx->src_fmt->name);
@@ -950,7 +951,7 @@ static int mfc_dec_dqbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 		mfc_err_ctx("Call on DQBUF after unrecoverable error\n");
 		return -EIO;
 	}
-	
+
 	if (!V4L2_TYPE_IS_MULTIPLANAR(buf->type)) {
 		mfc_err_ctx("Invalid V4L2 Buffer for driver: type(%d)\n", buf->type);
 		return -EINVAL;
@@ -963,7 +964,7 @@ static int mfc_dec_dqbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 		mfc_debug(4, "dec dst buf[%d] DQ\n", buf->index);
 		ret = vb2_dqbuf(&ctx->vq_dst, buf, file->f_flags & O_NONBLOCK);
 
-		if (buf->index >= MFC_MAX_DPBS) {
+		if (buf->index >= MFC_MAX_BUFFERS) {
 			mfc_err_ctx("buffer index[%d] range over\n", buf->index);
 			return -EINVAL;
 		}

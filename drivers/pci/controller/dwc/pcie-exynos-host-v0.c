@@ -688,6 +688,21 @@ static ssize_t store_pcie(struct device *dev,
 				exynos_elbi_read(exynos_pcie, PCIE_ELBI_RDLH_LINKUP));
 		break;
 
+	case 16:
+		pr_info("%s: force all pwndn", __func__);
+		exynos_pcie->phy_ops.phy_all_pwrdn(exynos_pcie, exynos_pcie->ch_num);
+		break;
+
+	case 17:
+		pr_info("%s: force disable Lane0", __func__);
+		val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		val &= ~(PCS_LANE0_ENABLE);
+		exynos_sysreg_write(exynos_pcie, val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+
+		break;
+
 	case 18:
 		exynos_pcie_set_perst(0, 0);
 		break;
@@ -924,11 +939,13 @@ static void exynos_pcie_setup_rc(struct pcie_port *pp)
 	val |= exynos_pcie->max_link_speed;
 	exynos_pcie_wr_own_conf(pp, pcie_cap_off + PCI_EXP_LNKCTL2, 4, val);
 
-	exynos_pcie_rd_own_conf(pp, PCIE_LINK_CTRL_STAT, 4, &val);
-	val |= (0x1 << 7);
-	exynos_pcie_wr_own_conf(pp, PCIE_LINK_CTRL_STAT, 4, val);
-	exynos_pcie_rd_own_conf(pp, PCIE_LINK_CTRL_STAT, 4, &val);
-	pr_info("%s: extended synch[7]:0x%x\n", __func__, val);
+	if (exynos_pcie->ep_device_type == EP_QC_WIFI) {
+		exynos_pcie_rd_own_conf(pp, PCIE_LINK_CTRL_STAT, 4, &val);
+		val |= (0x1 << 7);
+		exynos_pcie_wr_own_conf(pp, PCIE_LINK_CTRL_STAT, 4, val);
+		exynos_pcie_rd_own_conf(pp, PCIE_LINK_CTRL_STAT, 4, &val);
+		pr_info("%s: extended synch[7]:0x%x\n", __func__, val);
+	}
 
 	/* For bifurcation PHY */
 	if (exynos_pcie->ip_ver == 0x889500) {
@@ -1195,7 +1212,6 @@ void exynos_pcie_work_l1ss(struct work_struct *work)
 	struct pcie_port *pp = &pci->pp;
 	struct device *dev = pci->dev;
 
-
 	if (exynos_pcie->work_l1ss_cnt == 0) {
 		dev_info(dev, "[%s]boot_cnt: %d, work_l1ss_cnt: %d\n",
 				__func__, exynos_pcie->boot_cnt,
@@ -1224,7 +1240,10 @@ static void exynos_pcie_assert_phy_reset(struct pcie_port *pp)
 		exynos_pcie->phy_ops.phy_config(exynos_pcie, exynos_pcie->ch_num);
 
 	if (exynos_pcie->use_ia) {
-		dev_info(pci->dev, "Set I/A version5 for CDR reset.");
+		if (exynos_pcie->ep_device_type == EP_BCM_WIFI)
+			dev_info(pci->dev, "Set I/A for CDR reset.");
+		if (exynos_pcie->ep_device_type == EP_QC_WIFI)
+			dev_info(pci->dev, "Set I/A version5 for CDR reset.");
 		/* PCIE_SUB_CON setting */
 		exynos_elbi_write(exynos_pcie, 0x10, 0x34); /* Enable TOE */
 #if defined(CONFIG_SOC_EXYNOS9810)
@@ -1246,100 +1265,153 @@ static void exynos_pcie_assert_phy_reset(struct pcie_port *pp)
 		exynos_ia_write(exynos_pcie, 0x133D0000, 0x38); /* Base addr2 : PCS */
 		exynos_ia_write(exynos_pcie, 0x13390000, 0x3C); /* Base addr3 : PCIE_IA */
 #endif
+		if (exynos_pcie->ep_device_type == EP_BCM_WIFI) {
+			/* IA_CNT_TRG 10 : Repeat 10 */
+			exynos_ia_write(exynos_pcie, 0xb, 0x10);
+			exynos_ia_write(exynos_pcie, 0x2ffff, 0x40);
 
-		/* IA_CNT_TRG repeat: max. 0xffff) */
-		exynos_ia_write(exynos_pcie, 0xffff, 0x10);   //target IA cnt: set this larger than the repetition number
+			/* L1.2 EXIT Interrupt Happens */
+			/* SQ0) UIR_1 : DATA MASK */
+			exynos_ia_write(exynos_pcie, 0x50000004, 0x100); /* DATA MASK_REG */
+			exynos_ia_write(exynos_pcie, 0xffff, 0x104); /* Enable bit 5 */
 
-		/* LOOP setting*/
-		exynos_ia_write(exynos_pcie, 0x2ffff, 0x40);  //loop_cnt:2, loop_interval_time: 65535(0xffff)*3.3ns (216us)
+			/* SQ1) BRT : Count check and exit*/
+			exynos_ia_write(exynos_pcie, 0x20930014, 0x108); /* READ AFC_DONE */
+			exynos_ia_write(exynos_pcie, 0xa, 0x10C);
 
-		/* L1.2 EXIT Interrupt Happens */
-		//======================================================================
-		//Sequencer START !
-		/* SQ0) UIR_1 : DATA MASK */
-		exynos_ia_write(exynos_pcie, 0x50000004, 0x100); /* DATA MASK_REG */
-		exynos_ia_write(exynos_pcie, 0xffff, 0x104); /* Enable bit 5 */
+			/* SQ2) Write : Count increment */
+			exynos_ia_write(exynos_pcie, 0x40030044, 0x110);
+			exynos_ia_write(exynos_pcie, 0x1, 0x114);
 
-		/* SQ1) BRT : Count check and exit*/
-		exynos_ia_write(exynos_pcie, 0x21130014, 0x108);  //if counter expires, go to exit (SQ17)
-		exynos_ia_write(exynos_pcie, 0xfa0, 0x10C);  //The number of repeat: 4000(0xfa0)
+			/* SQ3) DATA MASK : Mask AFC_DONE bit*/
+			exynos_ia_write(exynos_pcie, 0x50000004, 0x118);
+			exynos_ia_write(exynos_pcie, 0x20, 0x11C);
 
-		/* SQ2) Write : Count increment */
-		exynos_ia_write(exynos_pcie, 0x40030044, 0x110);
-		exynos_ia_write(exynos_pcie, 0x1, 0x114);
+			/* SQ4) BRT : Read and check AFC_DONE */
+			exynos_ia_write(exynos_pcie, 0x209101ec, 0x120);
+			exynos_ia_write(exynos_pcie, 0x20, 0x124);
 
-		/* SQ3) DATA MASK : Mask CDR_FLD_PLL_MODE_DONE bit*/
-		exynos_ia_write(exynos_pcie, 0x50000004, 0x118);
-		exynos_ia_write(exynos_pcie, 0x08, 0x11C);  //check bit[3] CDR_FLD_PLL_MODE_DONE
+			/* SQ5) WRITE : CDR_EN 0xC0 */
+			exynos_ia_write(exynos_pcie, 0x400200d0, 0x128);
+			exynos_ia_write(exynos_pcie, 0xc0, 0x12C);
 
-		/* SQ4) BRT : Read and check CDR_FLD_PLL_MODE_DONE, if TRUE, go to check CDR_DATA_MODE(SQ10) */
-		exynos_ia_write(exynos_pcie, 0x20a101ec, 0x120);  //if CDR_PLL_MODE=1, go to check CDR_DATA_MODE(SQ10)
+			/* SQ6) WRITE : CDR_EN 0x80*/
+			exynos_ia_write(exynos_pcie, 0x400200d0, 0x130);
+			exynos_ia_write(exynos_pcie, 0x80, 0x134);
 
-		exynos_ia_write(exynos_pcie, 0x8, 0x124); //check bit[3] CDR_FLD_PLL_MODE_DONE
+			/* SQ7) WRITE : CDR_EN 0x0*/
+			exynos_ia_write(exynos_pcie, 0x400200d0, 0x138);
+			exynos_ia_write(exynos_pcie, 0x0, 0x13C);
 
-		/* SQ5) WRITE : CDR_EN 0xC0 */
-		exynos_ia_write(exynos_pcie, 0x400200d0, 0x128); 
-		exynos_ia_write(exynos_pcie, 0xc0, 0x12C);
+			/* SQ8) LOOP */
+			exynos_ia_write(exynos_pcie, 0x100101ec, 0x140);
+			exynos_ia_write(exynos_pcie, 0x20, 0x144);
 
-		/* SQ6) WRITE : CDR_EN 0x80*/
-		exynos_ia_write(exynos_pcie, 0x400200d0, 0x130);
-		exynos_ia_write(exynos_pcie, 0x80, 0x134);
+			/* SQ9) Clear L1.2 EXIT Interrupt */
+			exynos_ia_write(exynos_pcie, 0x70000004, 0x148);
+			exynos_ia_write(exynos_pcie, 0x10, 0x14C);
 
-		/* SQ7) WRITE : CDR_EN 0x0*/
-		exynos_ia_write(exynos_pcie, 0x400200d0, 0x138);
-		exynos_ia_write(exynos_pcie, 0x0, 0x13C);
+			/* SQ10) WRITE : IA_CNT Clear*/
+			exynos_ia_write(exynos_pcie, 0x40030010, 0x150);
+			exynos_ia_write(exynos_pcie, 0x1000b, 0x154);
 
-		/* SQ8) DATA MASK : Mask CDR_FLD_PLL_MODE_DONE bit*/
-		exynos_ia_write(exynos_pcie, 0x50000004, 0x140);
-		exynos_ia_write(exynos_pcie, 0x08, 0x144);  //check bit[3] CDR_FLD_PLL_MODE_DONE
+			/* SQ11) EOP : Return to idle */
+			exynos_ia_write(exynos_pcie, 0x80000000, 0x158);
+			exynos_ia_write(exynos_pcie, 0x0, 0x15C);
+		}
 
-		/* SQ9) LOOP: Check CDR_FLD_PLL_MODE_DONE is set*/
-		exynos_ia_write(exynos_pcie, 0x100101ec, 0x148);
-		exynos_ia_write(exynos_pcie, 0x8, 0x14C);
+		if (exynos_pcie->ep_device_type == EP_QC_WIFI) {
+			/* IA_CNT_TRG repeat: max. 0xffff) */
+			exynos_ia_write(exynos_pcie, 0xffff, 0x10);   //target IA cnt: set this larger than the repetition number
 
-		/* SQ10) DATA MASK : Mask CDR_PLL_MODE bit*/
-		exynos_ia_write(exynos_pcie, 0x50000004, 0x150);
-		exynos_ia_write(exynos_pcie, 0xC0, 0x154);  //check bit[7:6] CDR_PLL_MODE
+			/* LOOP setting*/
+			exynos_ia_write(exynos_pcie, 0x2ffff, 0x40);  //loop_cnt:2, loop_interval_time: 65535(0xffff)*3.3ns (216us)
 
-		/* SQ11) BRT : Read and check CDR_PLL_MODE. If not in DATA_MODE, polling (wait) */
-		exynos_ia_write(exynos_pcie, 0x211101dc, 0x158); //if it is DATA_MODE, exit(SQ17). If not, go to next
+			/* L1.2 EXIT Interrupt Happens */
+			//======================================================================
+			//
+			////Sequencer START !
+			//
+			/* SQ0) UIR_1 : DATA MASK */
+			exynos_ia_write(exynos_pcie, 0x50000004, 0x100); /* DATA MASK_REG */
+			exynos_ia_write(exynos_pcie, 0xffff, 0x104); /* Enable bit 5 */
 
-		exynos_ia_write(exynos_pcie, 0xC0, 0x15C); //check bit[7:6] CDR_PLL_MODE=0x3
+			/* SQ1) BRT : Count check and exit*/
+			exynos_ia_write(exynos_pcie, 0x21130014, 0x108);  //if counter expires, go to exit (SQ17)
+			exynos_ia_write(exynos_pcie, 0xfa0, 0x10C);  //The number of repeat: 4000(0xfa0)
 
-		/* SQ12) UIR_1 : DATA MASK */
-		exynos_ia_write(exynos_pcie, 0x50000004, 0x160); /* DATA MASK_REG */
-		exynos_ia_write(exynos_pcie, 0xffff, 0x164); /* Enable bit 5 */
+			/* SQ2) Write : Count increment */
+			exynos_ia_write(exynos_pcie, 0x40030044, 0x110);
+			exynos_ia_write(exynos_pcie, 0x1, 0x114);
 
-		/* SQ13) BRT : Count check and go to recovery exit*/
-		exynos_ia_write(exynos_pcie, 0x20530014, 0x168);  //if counter expires, go to recovery(SQ5)
-		exynos_ia_write(exynos_pcie, 0xfa0, 0x16C); //The number of repeat: 4000(0xfa0)
+			/* SQ3) DATA MASK : Mask CDR_FLD_PLL_MODE_DONE bit*/
+			exynos_ia_write(exynos_pcie, 0x50000004, 0x118);
+			exynos_ia_write(exynos_pcie, 0x08, 0x11C);  //check bit[3] CDR_FLD_PLL_MODE_DONE
 
-		/* SQ14) Write : Count increment */
-		exynos_ia_write(exynos_pcie, 0x40030044, 0x170);
-		exynos_ia_write(exynos_pcie, 0x1, 0x174);
+			/* SQ4) BRT : Read and check CDR_FLD_PLL_MODE_DONE, if TRUE, go to check CDR_DATA_MODE(SQ10) */
+			exynos_ia_write(exynos_pcie, 0x20a101ec, 0x120);  //if CDR_PLL_MODE=1, go to check CDR_DATA_MODE(SQ10)
+			exynos_ia_write(exynos_pcie, 0x8, 0x124); //check bit[3] CDR_FLD_PLL_MODE_DONE
 
-		/* SQ15) DATA MASK : Mask CDR_PLL_MODE bit*/
-		exynos_ia_write(exynos_pcie, 0x50000004, 0x178);
-		exynos_ia_write(exynos_pcie, 0xC0, 0x17C);  //check bit[7:6] CDR_PLL_MODE
+			/* SQ5) WRITE : CDR_EN 0xC0 */
+			exynos_ia_write(exynos_pcie, 0x400200d0, 0x128);
+			exynos_ia_write(exynos_pcie, 0xc0, 0x12C);
 
-		/* SQ16) BRF: Check check CDR_PLL_MODE. If not in DATA_MODE, go to check again*/
-		exynos_ia_write(exynos_pcie, 0x30B101dc, 0x180); //if it is not DATA_MODE, check again(SQ11)
+			/* SQ6) WRITE : CDR_EN 0x80*/
+			exynos_ia_write(exynos_pcie, 0x400200d0, 0x130);
+			exynos_ia_write(exynos_pcie, 0x80, 0x134);
 
-		exynos_ia_write(exynos_pcie, 0xC0, 0x184); //check bit[7:6] CDR_PLL_MODE=0x2
+			/* SQ7) WRITE : CDR_EN 0x0*/
+			exynos_ia_write(exynos_pcie, 0x400200d0, 0x138);
+			exynos_ia_write(exynos_pcie, 0x0, 0x13C);
 
-		/* SQ17) Clear L1.2 EXIT Interrupt */
-		exynos_ia_write(exynos_pcie, 0x70000004, 0x188);
-		exynos_ia_write(exynos_pcie, 0x10, 0x18C);
+			/* SQ8) DATA MASK : Mask CDR_FLD_PLL_MODE_DONE bit*/
+			exynos_ia_write(exynos_pcie, 0x50000004, 0x140);
+			exynos_ia_write(exynos_pcie, 0x08, 0x144);  //check bit[3] CDR_FLD_PLL_MODE_DONE
 
-		/* SQ18) WRITE : IA_CNT Clear*/
-		exynos_ia_write(exynos_pcie, 0x40030010, 0x190);
+			/* SQ9) LOOP: Check CDR_FLD_PLL_MODE_DONE is set*/
+			exynos_ia_write(exynos_pcie, 0x100101ec, 0x148);
+			exynos_ia_write(exynos_pcie, 0x8, 0x14C);
 
-		exynos_ia_write(exynos_pcie, 0x1ffff, 0x194);
+			/* SQ10) DATA MASK : Mask CDR_PLL_MODE bit*/
+			exynos_ia_write(exynos_pcie, 0x50000004, 0x150);
+			exynos_ia_write(exynos_pcie, 0xC0, 0x154);  //check bit[7:6] CDR_PLL_MODE
 
-		/* SQ19) EOP : Return to idle */
-		exynos_ia_write(exynos_pcie, 0x80000000, 0x198);
-		exynos_ia_write(exynos_pcie, 0x0, 0x19C);
+			/* SQ11) BRT : Read and check CDR_PLL_MODE. If not in DATA_MODE, polling (wait) */
+			exynos_ia_write(exynos_pcie, 0x211101dc, 0x158); //if it is DATA_MODE, exit(SQ17). If not, go to next
+			exynos_ia_write(exynos_pcie, 0xC0, 0x15C); //check bit[7:6] CDR_PLL_MODE=0x3
 
+			/* SQ12) UIR_1 : DATA MASK */
+			exynos_ia_write(exynos_pcie, 0x50000004, 0x160); /* DATA MASK_REG */
+			exynos_ia_write(exynos_pcie, 0xffff, 0x164); /* Enable bit 5 */
+
+			/* SQ13) BRT : Count check and go to recovery exit*/
+			exynos_ia_write(exynos_pcie, 0x20530014, 0x168);  //if counter expires, go to recovery(SQ5)
+			exynos_ia_write(exynos_pcie, 0xfa0, 0x16C); //The number of repeat: 4000(0xfa0)
+
+			/* SQ14) Write : Count increment */
+			exynos_ia_write(exynos_pcie, 0x40030044, 0x170);
+			exynos_ia_write(exynos_pcie, 0x1, 0x174);
+
+			/* SQ15) DATA MASK : Mask CDR_PLL_MODE bit*/
+			exynos_ia_write(exynos_pcie, 0x50000004, 0x178);
+			exynos_ia_write(exynos_pcie, 0xC0, 0x17C);  //check bit[7:6] CDR_PLL_MODE
+
+			/* SQ16) BRF: Check check CDR_PLL_MODE. If not in DATA_MODE, go to check again*/
+			exynos_ia_write(exynos_pcie, 0x30B101dc, 0x180); //if it is not DATA_MODE, check again(SQ11)
+			exynos_ia_write(exynos_pcie, 0xC0, 0x184); //check bit[7:6] CDR_PLL_MODE=0x2
+
+			/* SQ17) Clear L1.2 EXIT Interrupt */
+			exynos_ia_write(exynos_pcie, 0x70000004, 0x188);
+			exynos_ia_write(exynos_pcie, 0x10, 0x18C);
+
+			/* SQ18) WRITE : IA_CNT Clear*/
+			exynos_ia_write(exynos_pcie, 0x40030010, 0x190);
+			exynos_ia_write(exynos_pcie, 0x1ffff, 0x194);
+
+			/* SQ19) EOP : Return to idle */
+			exynos_ia_write(exynos_pcie, 0x80000000, 0x198);
+			exynos_ia_write(exynos_pcie, 0x0, 0x19C);
+		}
 		/* PCIE_IA Enable */
 		exynos_ia_write(exynos_pcie, 0x1, 0x0);
 	}
@@ -1528,13 +1600,21 @@ static int exynos_pcie_rd_own_conf(struct pcie_port *pp, int where, int size,
 		return PCIBIOS_DEVICE_NOT_FOUND;
 	}
 #endif
-	if (exynos_pcie->state == STATE_LINK_UP)
+	if (exynos_pcie->state == STATE_LINK_UP ||
+			exynos_pcie->state == STATE_LINK_UP_TRY)
 		is_linked = 1;
 
 	if (is_linked == 0) {
 		exynos_pcie_clock_enable(pp, PCIE_ENABLE_CLOCK);
 		exynos_pcie_phy_clock_enable(&pci->pp,
 				PCIE_ENABLE_CLOCK);
+
+		/* force enable Lane0 */
+		reg_val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		reg_val |= PCS_LANE0_ENABLE;
+		exynos_sysreg_write(exynos_pcie, reg_val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
 
 #ifdef NCLK_OFF_CONTROL
 		if (exynos_pcie->ip_ver >= 0x981000)
@@ -1560,6 +1640,13 @@ static int exynos_pcie_rd_own_conf(struct pcie_port *pp, int where, int size,
 			exynos_elbi_write(exynos_pcie, (0x1 << NCLK_OFF_OFFSET),
 							PCIE_L12ERR_CTRL);
 #endif
+		/* force disable Lane0 */
+		reg_val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		reg_val &= ~(PCS_LANE0_ENABLE);
+		exynos_sysreg_write(exynos_pcie, reg_val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+
 		exynos_pcie_phy_clock_enable(pp, PCIE_DISABLE_CLOCK);
 		exynos_pcie_clock_enable(pp, PCIE_DISABLE_CLOCK);
 	}
@@ -1590,7 +1677,8 @@ static int exynos_pcie_wr_own_conf(struct pcie_port *pp, int where, int size,
 		return PCIBIOS_DEVICE_NOT_FOUND;
 	}
 #endif
-	if (exynos_pcie->state == STATE_LINK_UP)
+	if (exynos_pcie->state == STATE_LINK_UP ||
+			exynos_pcie->state == STATE_LINK_UP_TRY)
 		is_linked = 1;
 
 	if (is_linked == 0) {
@@ -1598,6 +1686,13 @@ static int exynos_pcie_wr_own_conf(struct pcie_port *pp, int where, int size,
 		/*exynos_pcie_phy_clock_enable(&exynos_pcie->pp,*/
 		exynos_pcie_phy_clock_enable(&pci->pp,
 				PCIE_ENABLE_CLOCK);
+
+		/* force enable Lane0 */
+		reg_val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		reg_val |= PCS_LANE0_ENABLE;
+		exynos_sysreg_write(exynos_pcie, reg_val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
 
 #ifdef NCLK_OFF_CONTROL
 		if (exynos_pcie->ip_ver >= 0x981000)
@@ -1623,6 +1718,13 @@ static int exynos_pcie_wr_own_conf(struct pcie_port *pp, int where, int size,
 			exynos_elbi_write(exynos_pcie, (0x1 << NCLK_OFF_OFFSET),
 							PCIE_L12ERR_CTRL);
 #endif
+		/* force disable Lane0 */
+		reg_val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		reg_val &= ~(PCS_LANE0_ENABLE);
+		exynos_sysreg_write(exynos_pcie, reg_val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+
 		exynos_pcie_phy_clock_enable(pp, PCIE_DISABLE_CLOCK);
 		exynos_pcie_clock_enable(pp, PCIE_DISABLE_CLOCK);
 	}
@@ -1639,6 +1741,22 @@ static int exynos_pcie_rd_other_conf(struct pcie_port *pp,
 	u32 busdev, cfg_size;
 	u64 cpu_addr;
 	void __iomem *va_cfg_base;
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct exynos_pcie *exynos_pcie = to_exynos_pcie(pci);
+	u32 reg_val;
+	int is_linked = 0;
+
+	if (exynos_pcie->state == STATE_LINK_UP)
+		is_linked = 1;
+
+	if (is_linked == 0) {
+		/* force enable Lane0 */
+		reg_val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		reg_val |= PCS_LANE0_ENABLE;
+		exynos_sysreg_write(exynos_pcie, reg_val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+	}
 
 	busdev = PCIE_ATU_BUS(bus->number) | PCIE_ATU_DEV(PCI_SLOT(devfn)) |
 		 PCIE_ATU_FUNC(PCI_FUNC(devfn));
@@ -1659,6 +1777,15 @@ static int exynos_pcie_rd_other_conf(struct pcie_port *pp,
 	}
 	ret = dw_pcie_read(va_cfg_base + where, size, val);
 
+	if (is_linked == 0) {
+		/* force enable Lane0 */
+		reg_val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		reg_val &= ~(PCS_LANE0_ENABLE);
+		exynos_sysreg_write(exynos_pcie, reg_val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+	}
+
 	return ret;
 }
 
@@ -1670,6 +1797,22 @@ static int exynos_pcie_wr_other_conf(struct pcie_port *pp,
 	u32 busdev, cfg_size;
 	u64 cpu_addr;
 	void __iomem *va_cfg_base;
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct exynos_pcie *exynos_pcie = to_exynos_pcie(pci);
+	u32 reg_val;
+	int is_linked = 0;
+
+	if (exynos_pcie->state == STATE_LINK_UP)
+		is_linked = 1;
+
+	if (is_linked == 0) {
+		/* force enable Lane0 */
+		reg_val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		reg_val |= PCS_LANE0_ENABLE;
+		exynos_sysreg_write(exynos_pcie, reg_val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+	}
 
 	busdev = PCIE_ATU_BUS(bus->number) | PCIE_ATU_DEV(PCI_SLOT(devfn)) |
 		 PCIE_ATU_FUNC(PCI_FUNC(devfn));
@@ -1691,6 +1834,15 @@ static int exynos_pcie_wr_other_conf(struct pcie_port *pp,
 	}
 
 	ret = dw_pcie_write(va_cfg_base + where, size, val);
+
+	if (is_linked == 0) {
+		/* force enable Lane0 */
+		reg_val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		reg_val &= ~(PCS_LANE0_ENABLE);
+		exynos_sysreg_write(exynos_pcie, reg_val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+	}
 
 	return ret;
 }
@@ -2096,6 +2248,7 @@ static int __init exynos_pcie_probe(struct platform_device *pdev)
 	struct resource *temp_rsc;
 	int ret = 0;
 	int ch_num;
+	u32 val;
 
 	dev_info(&pdev->dev, "## PCIE0 PROBE start\n");
 
@@ -2242,6 +2395,20 @@ static int __init exynos_pcie_probe(struct platform_device *pdev)
 	ret = add_pcie_port(pp, pdev);
 	if (ret)
 		goto probe_fail;
+
+	/* force disable Lane0 */
+	pr_info("%s: force disable Lane0", __func__);
+	val = exynos_sysreg_read(exynos_pcie,
+			PCIE_WIFI0_PCIE_PHY_CONTROL);
+	val &= ~(PCS_LANE0_ENABLE);
+	exynos_sysreg_write(exynos_pcie, val,
+			PCIE_WIFI0_PCIE_PHY_CONTROL);
+
+	/* force phy all power down */
+	pr_info("%s: force one more all pwrdn", __func__);
+	if (exynos_pcie->phy_ops.phy_all_pwrdn != NULL) {
+		exynos_pcie->phy_ops.phy_all_pwrdn(exynos_pcie, exynos_pcie->ch_num);
+	}
 
 	disable_irq(pp->irq);
 
@@ -2641,11 +2808,20 @@ int exynos_pcie_poweron(int ch_num)
 		regmap_update_bits(exynos_pcie->pmureg,
 				exynos_pcie->pmu_offset,
 				   PCIE_PHY_CONTROL_MASK, 1);
+
 		/* phy all power down clear */
 		if (exynos_pcie->phy_ops.phy_all_pwrdn_clear != NULL) {
 			exynos_pcie->phy_ops.phy_all_pwrdn_clear(exynos_pcie,
 					exynos_pcie->ch_num);
 		}
+
+		/* force enable Lane0 */
+		pr_info("%s: force enable Lane0", __func__);
+		val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		val |= PCS_LANE0_ENABLE;
+		exynos_sysreg_write(exynos_pcie, val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
 
 		exynos_pcie->state = STATE_LINK_UP_TRY;
 
@@ -2782,6 +2958,14 @@ void exynos_pcie_poweroff(int ch_num)
 			exynos_pcie->phy_ops.phy_all_pwrdn(exynos_pcie,
 					exynos_pcie->ch_num);
 		}
+
+		/* force disable Lane0 */
+		pr_info("%s: force disable Lane0", __func__);
+		val = exynos_sysreg_read(exynos_pcie,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
+		val &= ~(PCS_LANE0_ENABLE);
+		exynos_sysreg_write(exynos_pcie, val,
+				PCIE_WIFI0_PCIE_PHY_CONTROL);
 
 		spin_unlock_irqrestore(&exynos_pcie->conf_lock, flags);
 

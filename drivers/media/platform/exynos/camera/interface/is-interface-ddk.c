@@ -327,7 +327,7 @@ static void is_lib_io_callback(void *this, enum lib_cb_event_type event_id,
 		break;
 	case LIB_EVENT_ERROR_CIN_OVERFLOW:
 		is_debug_event_count(IS_EVENT_OVERFLOW_3AA);
-		exynos_bcm_dbg_stop(CAMERA_DRIVER);
+		exynos_bcm_dbg_stop(PANIC_HANDLE);
 		msinfo_hw("LIB_EVENT_ERROR_CIN_OVERFLOW\n", instance_id, hw_ip);
 		is_hardware_flush_frame(hw_ip, FS_HW_CONFIGURE, IS_SHOT_OVERFLOW);
 

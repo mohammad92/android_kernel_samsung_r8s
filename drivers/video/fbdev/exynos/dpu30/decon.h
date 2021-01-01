@@ -1180,7 +1180,7 @@ struct decon_win_update {
 	u32 verti_cnt;
 	/* previous update region */
 	struct decon_rect prev_up_region;
-	struct decon_rect back_up_region;
+	bool force_full;
 };
 
 struct decon_bts_ops {
@@ -2154,6 +2154,7 @@ int _decon_enable(struct decon_device *decon, enum decon_state state);
 #ifdef CONFIG_EXYNOS_SET_ACTIVE
 /* Display Mode Support */
 #define EXYNOS_GET_DISPLAY_MODE_NUM	_IOW('F', 700, u32)
+#define EXYNOS_GET_DISPLAY_MODE_OLD		_IOW('F', 701, struct exynos_display_mode_old)
 #define EXYNOS_GET_DISPLAY_MODE		_IOW('F', 701, struct exynos_display_mode)
 #define EXYNOS_GET_DISPLAY_CURRENT_MODE _IOW('F', 705, u32)
 #endif

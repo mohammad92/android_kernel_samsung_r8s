@@ -213,7 +213,7 @@ int gpu_pm_qos_command(struct exynos_context *platform, gpu_pmqos_state state)
 		} else {
 			platform->gpu_operation_mode_info = GL_NORMAL;
 			pm_qos_update_request(&exynos5_g3d_cpu_cluster1_min_qos, platform->table[platform->step].cpu_middle_min_freq); /* MIDDLE Min request */
-			pm_qos_update_request(&exynos5_g3d_cpu_cluster1_max_qos, PM_QOS_CLUSTER1_FREQ_MAX_DEFAULT_VALUE) /* Middle Max request */
+			pm_qos_update_request(&exynos5_g3d_cpu_cluster1_max_qos, PM_QOS_CLUSTER1_FREQ_MAX_DEFAULT_VALUE); /* Middle Max request */
 			pm_qos_update_request(&exynos5_g3d_cpu_cluster2_max_qos, platform->table[platform->step].cpu_big_max_freq); /* BIG Max request */
 }
 #elif defined(CONFIG_MALI_SEC_G3D_PERF_STABLE_PMQOS)
@@ -269,6 +269,7 @@ int gpu_pm_qos_command(struct exynos_context *platform, gpu_pmqos_state state)
 		/*	if (pkbdev->pm.backend.metrics.is_full_compute_util && platform->cl_boost_disable == false)	{	*/
 		if (pkbdev->pm.backend.metrics.is_full_compute_util)	{
 			platform->gpu_operation_mode_info = CL_FULL;
+			pm_qos_update_request(&exynos5_g3d_mif_max_qos, platform->pmqos_compute_mif_max_clock);	/* MIF Min request */
 			pm_qos_update_request(&exynos5_g3d_mif_min_qos, platform->cl_pmqos_table[platform->step].mif_min_freq);	/* MIF Min request */
 			pm_qos_update_request(&exynos5_g3d_cpu_cluster0_min_qos, platform->cl_pmqos_table[platform->step].cpu_little_min_freq); /* LIT Min request */
 #if PM_QOS_CPU_CLUSTER_NUM == 2

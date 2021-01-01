@@ -2248,7 +2248,52 @@ static ssize_t set_kernel_sysfs_governor(struct kobject *kobj, struct kobj_attri
 	return count;
 }
 #endif /* #ifdef CONFIG_MALI_DVFS */
+#ifdef CONFIG_MALI_SEC_CL_BOOST
+static ssize_t show_kernel_sysfs_cl_boost_disable(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	ssize_t ret = 0;
+	struct exynos_context *platform = (struct exynos_context *)pkbdev->platform_context;
 
+	if (!platform)
+		return -ENODEV;
+
+	ret += snprintf(buf+ret, PAGE_SIZE-ret, "%d", platform->cl_boost_disable);
+
+	if (ret < PAGE_SIZE - 1) {
+		ret += snprintf(buf+ret, PAGE_SIZE-ret, "\n");
+	} else {
+		buf[PAGE_SIZE-2] = '\n';
+		buf[PAGE_SIZE-1] = '\0';
+		ret = PAGE_SIZE-1;
+	}
+
+	return ret;
+}
+
+static ssize_t set_kernel_sysfs_cl_boost_disable(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int cl_boost_disable = 0;
+	int ret;
+
+	struct exynos_context *platform = (struct exynos_context *)pkbdev->platform_context;
+
+	if (!platform)
+		return -ENODEV;
+
+	ret = kstrtoint(buf, 0, &cl_boost_disable);
+	if (ret) {
+		GPU_LOG(DVFS_WARNING, DUMMY, 0u, 0u, "%s: invalid value\n", __func__);
+		return -ENOENT;
+	}
+
+	if (cl_boost_disable == 0)
+		platform->cl_boost_disable = false;
+	else
+		platform->cl_boost_disable = true;
+
+	return count;
+}
+#endif
 static ssize_t show_kernel_sysfs_gpu_model(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	/* COPY from mali_kbase_core_linux.c : 2594 line, last updated: 20161017, r2p0-03rel0 */
@@ -2370,6 +2415,11 @@ static struct kobj_attribute gpu_available_governor_attribute =
 	__ATTR(gpu_available_governor, S_IRUGO, show_kernel_sysfs_available_governor, NULL);
 #endif /* #ifdef CONFIG_MALI_DVFS */
 
+#ifdef CONFIG_MALI_SEC_CL_BOOST
+static struct kobj_attribute gpu_cl_boost_disable_attribute =
+	__ATTR(gpu_cl_boost_disable, S_IRUGO|S_IWUSR, show_kernel_sysfs_cl_boost_disable, set_kernel_sysfs_cl_boost_disable);
+#endif
+
 static struct kobj_attribute gpu_model_attribute =
 	__ATTR(gpu_model, S_IRUGO, show_kernel_sysfs_gpu_model, NULL);
 
@@ -2390,6 +2440,9 @@ static struct attribute *attrs[] = {
 	&gpu_governor_attribute.attr,
 	&gpu_available_governor_attribute.attr,
 #endif /* #ifdef CONFIG_MALI_DVFS */
+#ifdef CONFIG_MALI_SEC_CL_BOOST
+	&gpu_cl_boost_disable_attribute.attr,
+#endif
 	&gpu_model_attribute.attr,
 	NULL,
 };

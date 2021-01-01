@@ -3165,7 +3165,7 @@ struct page *rmqueue(struct zone *preferred_zone,
 
 	do {
 		page = NULL;
-		if (alloc_flags & ALLOC_HARDER) {
+		if (order && (alloc_flags & ALLOC_HARDER)) {
 			page = __rmqueue_smallest(zone, order, MIGRATE_HIGHATOMIC);
 			if (page)
 				trace_mm_page_alloc_zone_locked(page, order, migratetype);

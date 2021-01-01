@@ -780,19 +780,25 @@ static u32 entry_to_index(struct zram *zram, struct zram_table_entry *entry)
 			sizeof(struct zram_table_entry));
 }
 
-static bool zram_try_mark_page(struct zram *zram, u32 index)
+#define SKIP 1
+#define ABORT 2
+static int zram_try_mark_page(struct zram *zram, u32 index)
 {
 	if (!zram_slot_trylock(zram, index))
-		return false;
-	if (!zram_allocated(zram, index) ||
-			zram_test_flag(zram, index, ZRAM_SAME) ||
+		return SKIP;
+
+	if (!zram_allocated(zram, index)) {
+		zram_slot_unlock(zram, index);
+		return ABORT;
+	}
+	if (zram_test_flag(zram, index, ZRAM_SAME) ||
 			zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
 		zram_slot_unlock(zram, index);
-		return false;
+		return SKIP;
 	}
 	zram_set_flag(zram, index, ZRAM_IDLE);
 	zram_slot_unlock(zram, index);
-	return true;
+	return 0;
 }
 
 #define ZRAM_WBD_INTERVAL 10 * HZ
@@ -1122,6 +1128,7 @@ static int zram_wbd(void *p)
 	struct page *page;
 	u32 index, offset = 0;
 	int count = 0;
+	int ret;
 
 	set_freezable();
 
@@ -1140,8 +1147,11 @@ static int zram_wbd(void *p)
 			if (!zram_wb_available(zram))
 				break;
 			index = entry_to_index(zram, zram_entry);
-			if (!zram_try_mark_page(zram, index))
+			ret = zram_try_mark_page(zram, index);
+			if (ret == SKIP)
 				continue;
+			else if (ret == ABORT)
+				break;
 			if (zram_comp_writeback_index(zram, index,
 					entry, &count, page, &offset, false))
 				break;
@@ -1947,6 +1957,9 @@ static bool zram_meta_alloc(struct zram *zram, u64 disksize)
 static void zram_free_page(struct zram *zram, size_t index)
 {
 	unsigned long handle;
+#ifdef CONFIG_ZRAM_LRU_WRITEBACK
+	unsigned long flags;
+#endif
 
 #ifdef CONFIG_ZRAM_MEMORY_TRACKING
 	zram->table[index].ac_time = 0;
@@ -1996,10 +2009,10 @@ out:
 	WARN_ON_ONCE(zram->table[index].flags &
 		~(1UL << ZRAM_LOCK | 1UL << ZRAM_UNDER_WB));
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	spin_lock(&zram->list_lock);
+	spin_lock_irqsave(&zram->list_lock, flags);
 	if (!list_empty(&zram->table[index].lru_list))
 		list_del_init(&zram->table[index].lru_list);
-	spin_unlock(&zram->list_lock);
+	spin_unlock_irqrestore(&zram->list_lock, flags);
 #endif
 }
 
@@ -2010,6 +2023,9 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
 	unsigned long handle;
 	unsigned int size;
 	void *src, *dst;
+#ifdef CONFIG_ZRAM_LRU_WRITEBACK
+	unsigned long flags;
+#endif
 
 	zram_slot_lock(zram, index);
 	if (zram_test_flag(zram, index, ZRAM_WB)) {
@@ -2073,10 +2089,10 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
 
 	zs_unmap_object(zram->mem_pool, handle);
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	spin_lock(&zram->list_lock);
+	spin_lock_irqsave(&zram->list_lock, flags);
 	if (!list_empty(&zram->table[index].lru_list))
 		list_del_init(&zram->table[index].lru_list);
-	spin_unlock(&zram->list_lock);
+	spin_unlock_irqrestore(&zram->list_lock, flags);
 #endif
 	zram_slot_unlock(zram, index);
 
@@ -2128,6 +2144,9 @@ static int __zram_bvec_write(struct zram *zram, struct bio_vec *bvec,
 	struct page *page = bvec->bv_page;
 	unsigned long element = 0;
 	enum zram_pageflags flags = 0;
+#ifdef CONFIG_ZRAM_LRU_WRITEBACK
+	unsigned long irq_flags;
+#endif
 
 	mem = kmap_atomic(page);
 	if (page_same_filled(mem, &element)) {
@@ -2225,9 +2244,9 @@ out:
 		zram_set_handle(zram, index, handle);
 		zram_set_obj_size(zram, index, comp_len);
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
-		spin_lock(&zram->list_lock);
+		spin_lock_irqsave(&zram->list_lock, irq_flags);
 		list_add_tail(&zram->table[index].lru_list, &zram->list);
-		spin_unlock(&zram->list_lock);
+		spin_unlock_irqrestore(&zram->list_lock, irq_flags);
 #endif
 	}
 	zram_slot_unlock(zram, index);

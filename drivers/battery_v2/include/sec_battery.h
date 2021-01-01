@@ -115,8 +115,9 @@ extern char *sec_cable_type[];
 #define BATT_MISC_EVENT_WIRELESS_AUTH_FAIL      0x00000800
 #define BATT_MISC_EVENT_WIRELESS_AUTH_PASS      0x00001000
 #define BATT_MISC_EVENT_TEMP_HICCUP_TYPE		0x00002000
-#if defined(CONFIG_BATTERY_AGE_FORECAST)
 #define BATT_MISC_EVENT_BATTERY_HEALTH			0x000F0000
+#define BATT_MISC_EVENT_HEALTH_OVERHEATLIMIT		0x00100000
+#define BATT_MISC_EVENT_ABNORMAL_PAD		0x00200000
 
 #define BATTERY_HEALTH_SHIFT                16
 enum misc_battery_health {
@@ -129,7 +130,6 @@ enum misc_battery_health {
 	/* For event */
 	BATTERY_HEALTH_BAD = 0xF,
 };
-#endif
 
 #if defined(CONFIG_SEC_FACTORY)             // SEC_FACTORY
 #define STORE_MODE_CHARGING_MAX 80

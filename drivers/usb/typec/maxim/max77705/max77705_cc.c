@@ -198,7 +198,11 @@ void max77705_ccic_event_work(void *data, int dest, int id, int attach, int even
 #endif
 
 	msg_maxim("usb: DIAES %d-%d-%d-%d-%d", dest, id, attach, event, sub);
-	event_work = kmalloc(sizeof(struct ccic_state_work), GFP_ATOMIC);
+	event_work = kmalloc(sizeof(struct ccic_state_work), GFP_KERNEL);
+	if (!event_work) {
+		msg_maxim("failed to allocate event_work");
+		return;
+	}
 	INIT_WORK(&event_work->ccic_work, max77705_ccic_event_notifier);
 
 	event_work->dest = dest;

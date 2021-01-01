@@ -759,6 +759,8 @@ struct modem_ctl {
 	struct workqueue_struct *wakeup_wq;
 	struct work_struct wakeup_work;
 	struct work_struct suspend_work;
+	struct workqueue_struct *crash_wq;
+	struct work_struct crash_work;
 
 	struct wake_lock mc_wake_lock;
 	struct mutex pcie_onoff_lock;

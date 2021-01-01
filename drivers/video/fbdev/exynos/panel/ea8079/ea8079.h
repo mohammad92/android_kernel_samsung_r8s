@@ -688,4 +688,5 @@ static void update_current_scr_white(struct maptbl *tbl, u8 *dst);
 #ifdef CONFIG_DYNAMIC_FREQ
 static int getidx_dyn_ffc_table(struct maptbl *tbl);
 #endif
+static bool is_panel_state_not_lpm(struct panel_device *panel);
 #endif /* __EA8079_H__ */

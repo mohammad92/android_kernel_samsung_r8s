@@ -710,8 +710,8 @@ int ssp_motor_callback(int state)
 
 	ssp_data_info->motor_state = state;
 
-	queue_work(ssp_data_info->ssp_motor_wq,
-			&ssp_data_info->work_ssp_motor);
+	if (ssp_data_info->ssp_motor_wq != NULL)
+		queue_work(ssp_data_info->ssp_motor_wq, &ssp_data_info->work_ssp_motor);
 
 	pr_info("[SSP] %s : Motor state %d\n", __func__, state);
 

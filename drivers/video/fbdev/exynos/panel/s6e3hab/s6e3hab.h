@@ -1562,4 +1562,5 @@ static void copy_afc_maptbl(struct maptbl *tbl, u8 *dst);
 static bool s6e3hab_hubble_bridge_refresh_rate_changeable(struct panel_device *panel);
 #endif
 #endif /* CONFIG_EXYNOS_DECON_MDNIE_LITE */
+static bool is_panel_state_not_lpm(struct panel_device *panel);
 #endif /* __S6E3HAB_H__ */

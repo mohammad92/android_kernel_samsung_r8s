@@ -87,7 +87,7 @@
 #define USE_MCU_SPI_PUD_SETTING
 
 // #define USE_FAKE_RETENTION
-
+#define USE_CAMFW_POLICY_ED38
 #define CAMERA_FRONT_FIXED_FOCUS
 
 /*
@@ -95,4 +95,6 @@
  * Solution : Add additional delay between rom_power_off and prepare_retention to make sure VDDIO is LOW during the boot.
  */
 #define CAMERA_USE_COMMON_VDDIO
+
+#define TELE_OIS_TILT_ROM_ID 4
 #endif /* IS_VENDOR_CONFIG_CNT_V01_H */

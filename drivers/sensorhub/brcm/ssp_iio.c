@@ -266,7 +266,7 @@ void report_light_data(struct ssp_data *data,int sensor_type, struct sensor_valu
 	
 	if(!data->camera_lux_en && 
 			(lightdata->light_t.lux <= 100) && 
-			(data->brightness       >=  65))
+			(data->brightness       >= 65 ))
 	{
 
 		if(data->light_log_cnt == 0)

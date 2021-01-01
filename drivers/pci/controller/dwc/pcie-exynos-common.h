@@ -174,6 +174,7 @@ struct pcie_phyops {
 				struct regmap *sysreg_phandle,
 				void *elbi_base_regs, int ch_num);
 	int (*phy_eom)(struct device *dev, void *phy_base_regs);
+	void (*phy_input_clk_change)(struct exynos_pcie *exynos_pcie, bool enable);
 };
 
 struct exynos_pcie_ops {
@@ -226,6 +227,7 @@ struct exynos_pcie {
 	bool			use_nclkoff_en;
 	bool			cpl_timeout_recovery;
 	bool			pcie_irq_enabled;
+	bool			sudden_linkdown;
 	spinlock_t		conf_lock;
 	spinlock_t              reg_lock;
 	spinlock_t              pcie_l1_exit_lock;

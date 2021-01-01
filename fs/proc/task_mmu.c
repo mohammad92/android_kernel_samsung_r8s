@@ -1718,6 +1718,9 @@ cont:
 		if (PageTransCompound(page))
 			continue;
 
+		if (PageUnevictable(page))
+			continue;
+
 		if (isolate_lru_page(page))
 			continue;
 

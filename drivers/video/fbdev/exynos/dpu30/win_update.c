@@ -107,12 +107,13 @@ static void win_update_check_limitation(struct decon_device *decon,
 	int adj_src_x = 0, adj_src_y = 0;
 
 	/*
-	 * 'readback + window update' is not a HW limitation,
+	 * 'readback/fence/tui + window update' is not a HW limitation,
 	 * the update region is changed to full
 	 */
-	if (regs->readback.request) {
-		DPU_DEBUG_WIN("Readback case is treated as full size\n");
+	if (decon->win_up.force_full) {
+		DPU_DEBUG_WIN("Full size update flag is set!\n");
 		DPU_FULL_RECT(&regs->up_region, decon->lcd_info);
+		decon->win_up.force_full = false;
 		return;;
 	}
 

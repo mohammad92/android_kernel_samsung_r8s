@@ -22,7 +22,7 @@
 
 /* TRACE functions/structures are changed in r25p0(EAC)
  * Trace-related functions have been temporarily replaced and need to be re-checked when officially applying.
- *   
+ *
  */
 #ifdef CONFIG_MALI_EXYNOS_TRACE
 #define GPU_LOG(level, code, gpu_addr, info_val, msg, args...) \
@@ -315,6 +315,7 @@ struct exynos_context {
 	int runtime_pm_delay_time;
 	bool pmqos_int_disable;
 
+	int pmqos_compute_mif_max_clock;
 	int pmqos_mif_max_clock;
 	int pmqos_mif_max_clock_base;
 #ifdef CONFIG_MALI_SEC_G3D_PERF_STABLE_PMQOS
@@ -422,6 +423,8 @@ struct exynos_context {
 #endif
    	int wa_frame_cnt;
 
+	/* Callback to call when for GPU clock changes */
+	struct notifier_block *nb_clock_change;
 };
 
 struct kbase_device *gpu_get_device_structure(void);

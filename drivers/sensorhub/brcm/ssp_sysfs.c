@@ -1304,7 +1304,6 @@ static struct file_operations const ssp_batch_fops = {
 	.unlocked_ioctl = ssp_batch_ioctl,
 };
 
-
 #if defined(CONFIG_SENSORS_SABC)
 static int ssp_inject_additional_info(struct ssp_data *data,
                                           const char *buf, int count)

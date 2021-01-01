@@ -981,7 +981,7 @@ static int panel_cmdq_flush(struct panel_device *panel)
 			v4l2_subdev_call(&panel->profiler.sd, core, ioctl, PROFILE_DATALOG, &pc);
 		}
 		pp.pkt_type = PROFILER_DATALOG_PANEL | PROFILER_DATALOG_PANEL_CMD_FLUSH_END;
-		pp.time = ktime_get();
+		pp.time = ktime_after(time_end, pp.time) ? (time_end - pp.time) : (KTIME_MAX - pp.time) + time_end;
 		v4l2_subdev_call(&panel->profiler.sd, core, ioctl, PROFILE_DATALOG, &pp);
 	}
 #endif
