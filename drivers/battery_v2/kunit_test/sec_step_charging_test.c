@@ -78,7 +78,7 @@ static void kunit_sec_bat_reset_step_charging(struct test *test)
 	battery->dc_float_voltage_set = backup_dc_float_voltage_set;
 #endif
 }
-
+#if 0
 static void kunit_sec_bat_exit_step_charging(struct test *test)
 {
 	struct power_supply *psy = power_supply_get_by_name("battery");
@@ -130,7 +130,7 @@ static void kunit_sec_bat_exit_step_charging(struct test *test)
 		}
 	}
 }
-
+#endif
 /*
  * Here we make a list of all the test cases we want to add to the test module
  * below.
@@ -147,7 +147,7 @@ static struct test_case sec_step_charging_test_cases[] = {
 	TEST_CASE(sec_step_charging_test_start),
 
 	TEST_CASE(kunit_sec_bat_reset_step_charging),
-	TEST_CASE(kunit_sec_bat_exit_step_charging),
+	//TEST_CASE(kunit_sec_bat_exit_step_charging),
 #endif
 	/* NOTE: UML TC */
 	TEST_CASE(sec_step_charging_test_bar),

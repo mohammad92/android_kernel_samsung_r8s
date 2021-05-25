@@ -993,14 +993,15 @@
 	};
 
 	panel-lookup {
-		panel-name = "ea8076_r8s_pre", "ea8079_r8s_dv", "ea8079_r8s_default";
-		panel-ddi-info = <&ea8076 &ea8079>;
-		panel-display-modes = <&r8s_pre_panel_display_modes &r8s_panel_display_modes>;
+		panel-name = "ea8076_r8s_pre", "ea8079_r8s_dv", "ea8079_r8s_default", "s6e3fc3_r8s_default";
+		panel-ddi-info = <&ea8076 &ea8079 &s6e3fc3>;
+		panel-display-modes = <&r8s_pre_panel_display_modes &r8s_panel_display_modes &r8s_panel_display_modes>;
 		panel-lut = <
-			0x800080 0xF000F0 0x0 0x0	/* EA8076 1080X2400 R8 PANEL BRING UP */
-			0x800040 0xF000FF 0x1 0x1	/* EA8079 1080X2400 R8 PANEL DV */
-			0x800041 0xF000FF 0x1 0x1	/* EA8079 1080X2400 R8 PANEL DV */
-			0x800040 0xF000F0 0x2 0x1	/* EA8079 1080X2400 R8 PANEL PV */
+			0x801080 0xF0F0F0 0x0 0x0	/* EA8076	1080X2400 R8 PANEL BRING UP */
+			0x800040 0xF000FF 0x1 0x1	/* EA8079	1080X2400 R8 PANEL DV */
+			0x800041 0xF000FF 0x1 0x1	/* EA8079	1080X2400 R8 PANEL DV */
+			0x800040 0xF000F0 0x2 0x1	/* EA8079	1080X2400 R8 PANEL 1st */
+			0x805080 0xF0F0F0 0x3 0x2	/* S6E3FC3	1080X2400 R8 PANEL 2nd */
 			0x000000 0x000000 0x2 0x1	/* default */
 		>;
 	};

@@ -25,6 +25,11 @@ extern void sec_bat_set_mfc_off(struct sec_battery_info *battery, bool need_ept)
 extern void sec_bat_set_mfc_on(struct sec_battery_info *battery, bool always_on);
 extern void sec_bat_change_default_current(struct sec_battery_info *battery, int cable_type, int input, int output);
 extern int sec_bat_check_afc_input_current(struct sec_battery_info *battery, int input_current);
+extern void sec_bat_set_rp_current(struct sec_battery_info *battery, int cable_type);
+extern void sec_bat_wc_cv_mode_check(struct sec_battery_info *battery);
+extern int sec_bat_check_pd_input_current(struct sec_battery_info *battery, int input_current);
+extern void sec_bat_set_wireless20_current(struct sec_battery_info *battery, int rx_power);
+
 /*
  * This is the most fundamental element of KUnit, the test case. A test case
  * makes a set EXPECTATIONs and ASSERTIONs about the behavior of some code; if
@@ -68,7 +73,7 @@ static void sec_battery_test_end(struct test *test)
 	queue_delayed_work(battery->monitor_wqueue, &battery->monitor_work, 0);
 }
 
-static int fill_powerlist_pd20(PDIC_SINK_STATUS *sink_status)
+static int fill_powerlist_pd20(PDIC_SINK_STATUS *sink_status, int max_voltage)
 {
 	int i = 1;
 
@@ -96,10 +101,19 @@ static int fill_powerlist_pd20(PDIC_SINK_STATUS *sink_status)
 
 	sink_status->available_pdo_num = i-1;
 
+	if (max_voltage <= 5000)
+		sink_status->selected_pdo_num = 1;
+	else if (max_voltage <= 7000)
+		sink_status->selected_pdo_num = 2;
+	else if (max_voltage <= 9000)
+		sink_status->selected_pdo_num = 3;
+	else
+		sink_status->selected_pdo_num = 4;
+
 	return i-1;
 }
 
-static int fill_powerlist_pd30(PDIC_SINK_STATUS *sink_status)
+static int fill_powerlist_pd30(PDIC_SINK_STATUS *sink_status, int max_voltage)
 {
 	int i = 1;
 
@@ -134,6 +148,11 @@ static int fill_powerlist_pd30(PDIC_SINK_STATUS *sink_status)
 
 	sink_status->available_pdo_num = i-1;
 
+	if (max_voltage > 9000)
+		sink_status->selected_pdo_num = 2;
+	else 
+		sink_status->selected_pdo_num = 1;
+
 	return i-1;
 }
 
@@ -149,13 +168,13 @@ static void kunit_sec_make_pd_list(struct test *test)
 
 	sink_status_backup = battery->pdic_info.sink_status;
 
-	fill_powerlist_pd20(&battery->pdic_info.sink_status);
+	fill_powerlist_pd20(&battery->pdic_info.sink_status, battery->pdata->max_input_voltage);
 	make_pd_list(battery);
 	EXPECT_EQ(test, battery->pd_list.num_fpdo, 2);
 	EXPECT_EQ(test, battery->pd_list.num_apdo, 0);
 	EXPECT_EQ(test, battery->pd_list.max_pd_count, 2);
 
-	fill_powerlist_pd30(&battery->pdic_info.sink_status);
+	fill_powerlist_pd30(&battery->pdic_info.sink_status, battery->pdata->max_input_voltage);
 	make_pd_list(battery);
 	EXPECT_EQ(test, battery->pd_list.num_fpdo, 2);
 	EXPECT_EQ(test, battery->pd_list.num_apdo, 2);
@@ -268,25 +287,26 @@ static void kunit_sec_bat_aging_check(struct test *test)
 {
 	struct power_supply *psy = power_supply_get_by_name("battery");
 	struct sec_battery_info *battery = power_supply_get_drvdata(psy);
-	int i;
-	int cycle_table[5] = {1, 200, 300, 700, 1000};
-	int cycle = battery->batt_cycle;
 
-	battery->batt_cycle = -1;
-	sec_bat_aging_check(battery);
-	EXPECT_EQ(test, battery->pdata->age_step, i);
-	for (i = 4; i >= 0; i--) {
-		battery->batt_cycle = cycle_table[i];
+	sec_age_data_t* age_data = battery->pdata->age_data;
+	int num_age_step = battery->pdata->num_age_step;
+	int cycle = battery->batt_cycle, step = battery->pdata->age_step;
+	int i;
+
+	for (i = 0; i < num_age_step; i++) {
+		battery->batt_cycle = age_data[i].cycle;
 		sec_bat_aging_check(battery);
 		EXPECT_EQ(test, battery->pdata->age_step, i);
-		battery->batt_cycle = cycle_table[i] + 1;
+
+		battery->batt_cycle = age_data[i].cycle + 1;
 		sec_bat_aging_check(battery);
 		EXPECT_EQ(test, battery->pdata->age_step, i);
 	}
 
 	battery->batt_cycle = cycle;
 	sec_bat_aging_check(battery);
-}
+	EXPECT_EQ(test, battery->pdata->age_step, step);
+ }
 
 extern int sec_bat_cable_check(struct sec_battery_info *battery,
 				muic_attached_dev_t attached_dev);
@@ -845,46 +865,21 @@ static void kunit_sec_bat_set_decrease_iout(struct test *test)
 	struct power_supply *psy = power_supply_get_by_name("battery");
 	struct sec_battery_info *battery = power_supply_get_drvdata(psy);
 	union power_supply_propval value = {0, };
-
-        int backup_input_current = battery->input_current;
+	int backup_input_current = battery->input_current;
 
 	test_info(test, "START %s test\n", __func__);
 
-        sec_bat_set_decrease_iout(battery, false);
+	battery->input_current = 1000;
+	sec_bat_set_decrease_iout(battery, false);
 
-        psy_do_property(battery->pdata->charger_name, get,
-                        POWER_SUPPLY_PROP_CURRENT_MAX, value);
+	psy_do_property(battery->pdata->charger_name, get,
+						POWER_SUPPLY_PROP_CURRENT_AVG, value);
 
-        EXPECT_LE(test, backup_input_current, value.intval);
+	EXPECT_LE(test, value.intval, battery->input_current);
 
-        value.intval = backup_input_current;
+	value.intval = battery->input_current = backup_input_current;
 	psy_do_property(battery->pdata->charger_name, set,
 		POWER_SUPPLY_EXT_PROP_PAD_VOLT_CTRL, value);
-
-
-	test_info(test, "%s test done\n", __func__);
-
-}
-
-static void kunit_sec_bat_set_mfc_onoff(struct test *test)
-{
-	struct power_supply *psy = power_supply_get_by_name("battery");
-	struct sec_battery_info *battery = power_supply_get_drvdata(psy);
-
-	int backup_val = gpio_get_value(battery->pdata->wpc_en);
-	int new_val = 0;
-
-	test_info(test, "START %s test\n", __func__);
-
-	sec_bat_set_mfc_on(battery, false);
-	new_val = gpio_get_value(battery->pdata->wpc_en);
-	EXPECT_EQ(test, new_val, 0);
-
-	sec_bat_set_mfc_off(battery, false);
-	new_val = gpio_get_value(battery->pdata->wpc_en);
-	EXPECT_EQ(test, new_val, 1);
-
-	gpio_direction_output(battery->pdata->wpc_en, backup_val);
 
 	test_info(test, "%s test done\n", __func__);
 }
@@ -941,7 +936,211 @@ static void kunit_sec_bat_check_afc_input_current(struct test *test)
 
 	test_info(test, "%s test done\n", __func__);
 }
+
+static void kunit_sec_bat_set_rp_current(struct test *test)
+{
+	struct power_supply *psy = power_supply_get_by_name("battery");
+	struct sec_battery_info *battery = power_supply_get_drvdata(psy);
+
+	int backup_rp_currentlvl = battery->pdic_info.sink_status.rp_currentlvl;
+	int backup_current_event = battery->current_event;
+	int backup_store_mode = battery->store_mode;
+
+	test_info(test, "START %s test\n", __func__);
+
+	battery->pdic_info.sink_status.rp_currentlvl = RP_CURRENT_ABNORMAL;
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_USB);
+	EXPECT_EQ(test, battery->pdata->rp_current_abnormal_rp3,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->rp_current_abnormal_rp3,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].fast_charging_current);
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_TA);
+	EXPECT_EQ(test, battery->pdata->rp_current_abnormal_rp3,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->rp_current_abnormal_rp3,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].fast_charging_current);
+
+	battery->pdic_info.sink_status.rp_currentlvl = RP_CURRENT_LEVEL3;
+	battery->current_event = SEC_BAT_CURRENT_EVENT_HV_DISABLE;
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_USB);
+	EXPECT_EQ(test, battery->pdata->default_input_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->default_charging_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].fast_charging_current);
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_TA);
+	EXPECT_EQ(test, battery->pdata->default_input_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->default_charging_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].fast_charging_current);
+	battery->current_event = backup_current_event;
+
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_USB);
+	EXPECT_EQ(test, battery->pdata->rp_current_rdu_rp3,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->max_charging_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].fast_charging_current);
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_TA);
+	EXPECT_EQ(test, battery->pdata->rp_current_rdu_rp3,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->max_charging_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].fast_charging_current);
+
+	battery->store_mode = 0;
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_USB);
+	EXPECT_EQ(test, battery->pdata->rp_current_rp3,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->max_charging_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].fast_charging_current);
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_TA);
+	EXPECT_EQ(test, battery->pdata->rp_current_rp3,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->max_charging_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].fast_charging_current);
+	battery->store_mode = backup_store_mode;
+
+	battery->pdic_info.sink_status.rp_currentlvl = RP_CURRENT_LEVEL2;
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_USB);
+	EXPECT_EQ(test, battery->pdata->rp_current_rp2,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->rp_current_rp2,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].fast_charging_current);
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_TA);
+	EXPECT_EQ(test, battery->pdata->rp_current_rp2,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->rp_current_rp2,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].fast_charging_current);
+
+	battery->pdic_info.sink_status.rp_currentlvl = RP_CURRENT_LEVEL_DEFAULT;
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_USB);
+	EXPECT_EQ(test, battery->pdata->default_usb_input_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->default_usb_charging_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].fast_charging_current);
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_TA);
+	EXPECT_EQ(test, battery->pdata->default_input_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].input_current_limit);
+	EXPECT_EQ(test, battery->pdata->default_charging_current,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_TA].fast_charging_current);
+
+	battery->current_event = SEC_BAT_CURRENT_EVENT_USB_SUPER;
+	sec_bat_set_rp_current(battery, SEC_BATTERY_CABLE_USB);
+	EXPECT_EQ(test, USB_CURRENT_SUPER_SPEED,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].input_current_limit);
+	EXPECT_EQ(test, USB_CURRENT_SUPER_SPEED,
+		battery->pdata->charging_current[SEC_BATTERY_CABLE_USB].fast_charging_current);
+	battery->current_event = backup_current_event;
+
+	battery->pdic_info.sink_status.rp_currentlvl = backup_rp_currentlvl;
+
+	test_info(test, "%s test done\n", __func__);
+}
+
+static void kunit_sec_bat_check_pd_input_current(struct test *test)
+{
+	struct power_supply *psy = power_supply_get_by_name("battery");
+	struct sec_battery_info *battery = power_supply_get_drvdata(psy);
+
+	unsigned int backup_current_event = battery->current_event & SEC_BAT_CURRENT_EVENT_SELECT_PDO;
+	int input_current;
+
+	test_info(test, "START %s test\n", __func__);
+
+	input_current = battery->current_max;
+	sec_bat_set_current_event(battery, 0, SEC_BAT_CURRENT_EVENT_SELECT_PDO);
+	input_current = sec_bat_check_pd_input_current(battery, input_current);
+	EXPECT_EQ(test, input_current, battery->current_max);
+
+	input_current = battery->current_max;
+	sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_SELECT_PDO, SEC_BAT_CURRENT_EVENT_SELECT_PDO);
+	input_current = sec_bat_check_pd_input_current(battery, input_current);
+	EXPECT_EQ(test, input_current, SELECT_PDO_INPUT_CURRENT);
+
+	sec_bat_set_current_event(battery, backup_current_event, SEC_BAT_CURRENT_EVENT_SELECT_PDO);
+
+	test_info(test, "%s test done\n", __func__);
+}
 #endif
+
+static void kunit_sec_bat_wc_cv_mode_check(struct test *test)
+{
+	struct power_supply *psy = power_supply_get_by_name("battery");
+	struct sec_battery_info *battery = power_supply_get_drvdata(psy);
+
+	int backup_capacity = battery->capacity;
+	bool backup_wc_cv_mode = battery->wc_cv_mode;
+
+	test_info(test, "START %s test\n", __func__);
+
+	battery->capacity = 90;
+	sec_bat_wc_cv_mode_check(battery);
+	EXPECT_EQ(test, battery->wc_cv_mode, true);
+
+	battery->capacity = backup_capacity;
+	battery->wc_cv_mode = backup_wc_cv_mode;
+
+	test_info(test, "%s test done\n", __func__);
+}
+
+static void kunit_sec_bat_set_wireless20_current(struct test *test)
+{
+	struct power_supply *psy = power_supply_get_by_name("battery");
+	struct sec_battery_info *battery = power_supply_get_drvdata(psy);
+
+	unsigned int backup_cable_type = battery->cable_type;
+	unsigned int backup_wc_status = battery->wc_status;
+	unsigned int backup_wc20_power_class = battery->wc20_power_class;
+	int backup_temperature = battery->temperature;
+	int backup_siop_level = battery->siop_level;
+	bool backup_lcd_status = battery->lcd_status;
+	bool backup_sleep_mode = sleep_mode;
+	bool backup_store_mode = battery->store_mode;
+	int backup_chg_limit = battery->chg_limit;
+	int backup_wpc_input_limit_by_tx_check = battery->pdata->wpc_input_limit_by_tx_check;
+	int i = 0;
+	unsigned int backup_current_event = battery->current_event;
+
+	test_info(test, "START %s test\n", __func__);
+
+	battery->cable_type = SEC_BATTERY_CABLE_HV_WIRELESS_20;
+	battery->wc_status = SEC_WIRELESS_PAD_WPC_HV_20;
+	battery->temperature = 300;
+	battery->siop_level = 100;
+	battery->lcd_status = 0;
+	sleep_mode = false;
+	battery->store_mode = false;
+	battery->chg_limit = 0;
+	battery->pdata->wpc_input_limit_by_tx_check = 0;
+	sec_bat_set_current_event(battery, 0x0, 0xffffffff);
+
+	for (i = 0; i < SEC_WIRELESS_RX_POWER_MAX; i++) {
+		sec_bat_set_wireless20_current(battery, i);
+		test_info(test, "%s WC2.0 rx power[%d] - input current check\n", __func__, i);
+		EXPECT_EQ(test, battery->pdata->wireless_power_info[i].input_current_limit,
+			battery->pdata->charging_current[SEC_BATTERY_CABLE_HV_WIRELESS_20].input_current_limit);
+		test_info(test, "%s WC2.0 rx power[%d] - input current check\n", __func__, i);
+		EXPECT_EQ(test, battery->pdata->wireless_power_info[i].input_current_limit,
+			battery->input_current);
+		test_info(test, "%s WC2.0 rx power[%d] - output current check\n", __func__, i);
+		EXPECT_EQ(test, battery->pdata->wireless_power_info[i].fast_charging_current,
+			battery->pdata->charging_current[SEC_BATTERY_CABLE_HV_WIRELESS_20].fast_charging_current);
+		test_info(test, "%s WC2.0 rx power[%d] - output current check\n", __func__, i);
+		EXPECT_EQ(test, battery->pdata->wireless_power_info[i].fast_charging_current,
+			battery->charging_current);
+	}
+	battery->cable_type = backup_cable_type;
+	battery->wc_status = backup_wc_status;
+	battery->wc20_power_class = backup_wc20_power_class;
+	battery->temperature = backup_temperature;
+	battery->siop_level = backup_siop_level;
+	battery->lcd_status = backup_lcd_status;
+	sleep_mode = backup_sleep_mode;
+	battery->store_mode = backup_store_mode;
+	battery->chg_limit = backup_chg_limit;
+	battery->pdata->wpc_input_limit_by_tx_check = backup_wpc_input_limit_by_tx_check;
+	sec_bat_set_current_event(battery, backup_current_event, backup_current_event);
+
+	test_info(test, "%s test done\n", __func__);
+}
 
 /* NOTE: UML TC */
 static void sec_battery_test_bar(struct test *test)
@@ -995,6 +1194,7 @@ static struct test_case sec_battery_test_cases[] = {
 	TEST_CASE(kunit_sec_bat_get_input_charging_current_in_power_list),
 	TEST_CASE(kunit_sec_bat_get_temp_by_temp_control_source),
 	TEST_CASE(kunit_sec_bat_get_wireless20_power_class),
+	TEST_CASE(kunit_sec_bat_set_wireless20_current),
 	TEST_CASE(kunit_sec_bat_get_wireless_current),
 	TEST_CASE(kunit_sec_bat_handle_tx_misalign),
 	TEST_CASE(kunit_sec_bat_hv_wc_normal_mode_check),
@@ -1004,10 +1204,12 @@ static struct test_case sec_battery_test_cases[] = {
 	TEST_CASE(kunit_sec_bat_predict_wireless20_time_to_full_current),
 	TEST_CASE(kunit_sec_bat_set_charging_status),
 	TEST_CASE(kunit_sec_bat_set_decrease_iout),
-	TEST_CASE(kunit_sec_bat_set_mfc_onoff),
 
 	TEST_CASE(kunit_sec_bat_change_default_current),
 	TEST_CASE(kunit_sec_bat_check_afc_input_current),
+	TEST_CASE(kunit_sec_bat_set_rp_current),
+	TEST_CASE(kunit_sec_bat_wc_cv_mode_check),
+	TEST_CASE(kunit_sec_bat_check_pd_input_current),
 
 	TEST_CASE(sec_battery_test_end),
 	/* test_end has queue_delayed_work of monitor_work */

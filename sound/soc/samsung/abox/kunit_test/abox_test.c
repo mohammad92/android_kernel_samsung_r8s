@@ -33,10 +33,13 @@ static void abox_test_of_abox_get_data(struct test *test)
 
 static void abox_test_of_abox_cpu_enable(struct test *test)
 {
-	test_info(test, "test abox.%s - on false", __func__);
-	EXPECT_EQ(test, 0, abox_cpu_enable(false));
-	test_info(test, "test abox.%s - on true", __func__);
-	EXPECT_EQ(test, 0, abox_cpu_enable(true));
+	if (abox_is_on()) {
+		test_info(test, "test abox.%s - on true", __func__);
+		EXPECT_EQ(test, 0, abox_cpu_enable(true));
+	} else {
+		test_info(test, "test abox.%s - on false", __func__);
+		EXPECT_EQ(test, 0, abox_cpu_enable(false));
+	}
 }
 
 static void abox_test_of_is_abox(struct test *test)
@@ -166,18 +169,18 @@ static void abox_test_of_abox_of_get_addr(struct test *test)
 	test_info(test, "test abox.%s(ipc-tx-area)", __func__);
 	EXPECT_LE(test, 0, abox_of_get_addr(p_abox_data,
 				p_abox_data->dev->of_node,
-				"samsung,ipc-tx-area", p_abox_data->ipc_tx_addr,
-				&(p_abox_data->ipc_tx_size)));
+				"samsung,ipc-tx-area", &p_abox_data->ipc_tx_addr,
+				&p_abox_data->ipc_tx_size));
 	test_info(test, "test abox.%s(ipc-rx-area)", __func__);
 	EXPECT_LE(test, 0, abox_of_get_addr(p_abox_data,
 				p_abox_data->dev->of_node,
-				"samsung,ipc-rx-area", p_abox_data->ipc_rx_addr,
-				&(p_abox_data->ipc_rx_size)));
+				"samsung,ipc-rx-area", &p_abox_data->ipc_rx_addr,
+				&p_abox_data->ipc_rx_size));
 	test_info(test, "test abox.%s(shm-area)", __func__);
 	EXPECT_LE(test, 0, abox_of_get_addr(p_abox_data,
 				p_abox_data->dev->of_node,
-				"samsung,shm-area", p_abox_data->shm_addr,
-				&(p_abox_data->shm_size)));
+				"samsung,shm-area", &p_abox_data->shm_addr,
+				&p_abox_data->shm_size));
 }
 
 static void abox_test_of___abox_ipc_queue_empty(struct test *test)

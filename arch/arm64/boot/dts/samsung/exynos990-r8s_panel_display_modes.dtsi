@@ -49,7 +49,7 @@
 				};
 			};
 
-			/* EA8079*/
+			/* EA8079 & s6e3fc3 */
 
 			r8s_panel_display_modes:
 			r8s_panel_display_modes {

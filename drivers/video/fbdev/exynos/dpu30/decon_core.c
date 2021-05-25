@@ -202,6 +202,8 @@ void decon_dump(struct decon_device *decon, bool panel_dump)
 				ktime_to_ns(decon->d.buf_cnt_bak.timestamp));
 		dpu_show_dma_attach_info("decon_dump", decon, 1);
 	}
+	dpu_show_readback_buf_info(decon, 0);
+
 	__decon_dump(decon->id, decon->res.regs, base_regs,
 			decon->lcd_info->dsc.en);
 
@@ -1656,6 +1658,8 @@ static void print_dma_leak_info(struct decon_device *decon)
 	int printcnt;
 	struct dma_leak_info *leak_info;
 
+	dpu_show_readback_buf_info(decon, 0);
+
 	decon_info("[DECON:INFO]: leak count : %d\n", decon->leak_cnt);
 
 	pos = (decon->leak_cnt % LEAK_INFO_ARRAY_CNT);
@@ -1733,6 +1737,8 @@ static unsigned int decon_map_ion_handle(struct decon_device *decon,
 		}
 	}
 #endif
+
+	dpu_show_readback_buf_info(decon, 5);
 
 	dma->attachment = dma_buf_attach(dma->dma_buf, dev);
 	if (IS_ERR_OR_NULL(dma->attachment)) {
@@ -2892,6 +2898,8 @@ void decon_readback_wq(struct work_struct *work)
 	decon_signal_fence(decon, decon->readback.fence);
 	dma_fence_put(decon->readback.fence);
 
+	decon->readback.unmap_cnt++;
+
 	decon_dbg("%s -\n", __func__);
 }
 
@@ -3569,6 +3577,9 @@ static int decon_prepare_win_config(struct decon_device *decon,
 		ret = decon_import_buffer(decon, decon->dt.wb_win,
 				config, regs);
 
+		if (!ret && regs->readback.request)
+			decon->readback.map_cnt++;
+
 		if (regs->readback.request && (config->rel_fence >= 0)) {
 			/* fence is managed by buffer not plane */
 			fence = sync_file_get_fence(config->rel_fence);
@@ -3757,7 +3768,6 @@ static int decon_set_win_config(struct decon_device *decon,
 			sizeof(struct decon_rect));
 
 	if (num_of_window) {
-		fd_install(win_data->retire_fence, sync_ifile->file);
 		decon_create_release_fences(decon, win_data, sync_ifile);
 		regs->retire_fence = dma_fence_get(sync_ifile->fence);
 	}
@@ -3796,6 +3806,18 @@ add_new_regs:
 #ifdef CONFIG_SUPPORT_MASK_LAYER
 	decon_wait_mask_layer_trigger(decon);
 #endif
+	/**
+	 * The code is moved here because the DPU driver may get a wrong fd
+	 * through the released file pointer,
+	 * if the user(HWC) closes the fd and releases the file pointer.
+	 *
+	 * Since the user land can use fd from this point/time,
+	 * it can be guaranteed to use an unreleased file pointer
+	 * when creating a rel_fence in decon_create_release_fences(...)
+	 */
+	if (num_of_window)
+		fd_install(win_data->retire_fence, sync_ifile->file);
+
 	mutex_unlock(&decon->lock);
 	decon_systrace(decon, 'C', "decon_win_config", 0);
 

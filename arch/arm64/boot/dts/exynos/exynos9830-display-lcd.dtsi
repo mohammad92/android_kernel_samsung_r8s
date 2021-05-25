@@ -654,7 +654,7 @@
 			};
 
 			ea8076: ea8076_ddi {
-				id = <0x80083>;
+				id = <0x800083>;
 				mode = <2>;	/* 0: video mode, 1: DP command mode, 2: MIPI command mode */
 				resolution = <1080 2400>;
 				size = <67 150>;	/* 67.284 * 149.52 */
@@ -693,7 +693,47 @@
 			};
 
 			ea8079: ea8079_ddi {
-				id = <0x80040>;
+				id = <0x800040>;
+				mode = <2>;	/* 0: video mode, 1: DP command mode, 2: MIPI command mode */
+				resolution = <1080 2400>;
+				size = <67 150>;	/* 67.284 * 149.52 */
+				timing,refresh = <120>;
+				timing,h-porch = <2 2 2>;
+				timing,v-porch = <15 3 1>;
+				timing,dsi-hs-clk = <1110>;	/* <1110> - <2 171 2 -15124> */
+				timing,pmsk = <
+					0x02 0xAB 0x02 0xC4EC	/* p m s k */
+					0x0 0x0 0x0 0x0	/* mfr mrr sel_pf icp */
+					0x0 0x0 0x0 0x0	/* afc_enb extafc feed_en fsel */
+					0x0 0x0          	/* fout_mask rsel */
+					>;
+				timing,dsi-escape-clk = <20>;
+				mic_en = <0>;			/* 0: Disable, 1: Enable */
+				mic_ratio = <2>;		/* 0: 1/2 mic, 1: 1/3 mic */
+				mic_ver = <2>;			/* 0: mic v1.1, 1: v1.2, 2: v2.0 */
+				type_of_ddi = <0>;		/* 0: Samsung Mobile, 1: MAGNA, 2: Normal(Etc) */
+				dsc_en = <1>;			/* 0: Disable, 1: Enable */
+				dsc_cnt = <2>;			/* used DSC count */
+				dsc_slice_num = <2>;		/* count of dsc slice */
+				dsc_slice_h = <40>;		/* height of dsc slice */
+				data_lane = <4>;		/* number of using data lane */
+				cmd_underrun_cnt = <7494>;	/* for underrun detect*/
+				default_mode = <0>;
+				display_mode =
+					<1080 2400 120 1770 1 540 40>,	/* w, h, fps, lpref, dsc_en, slice_w, slice,h */
+					<1080 2400 60 7494 1 540 40>;
+				hdr_num = <2>;			/* max: 4 */
+				hdr_type = <2 3 0 0>;		/* 1: DOLBY_VISION, 2: HDR10, 3: HLG */
+				hdr_max_luma = <4000000>;	/* 400 */
+				hdr_max_avg_luma = <1200000>;	/* 120 */
+				hdr_min_luma = <5>;		/* 0.0005 */
+				/*	A: 1110  B: 1114  C: 1124	*/
+				dynamic_freq =  <&freq_1110 &freq_1114 &freq_1124>;
+				color_mode = <0 7 9>;  /* color mode : NATIVE, SRGB, P3 */
+			};
+
+			s6e3fc3: s6e3fc3_ddi {
+				id = <0x805080>;
 				mode = <2>;	/* 0: video mode, 1: DP command mode, 2: MIPI command mode */
 				resolution = <1080 2400>;
 				size = <67 150>;	/* 67.284 * 149.52 */

@@ -8,3 +8,4 @@ obj-$(CONFIG_STEP_CHARGING)	+= sec_step_charging_test.o
 obj-$(CONFIG_OF)	+= sec_adc_test.o
 obj-$(CONFIG_MULTI_CHARGING)	+= sec_multi_charger_test.o
 obj-$(CONFIG_CCIC_NOTIFIER)	+= sec_pd_test.o
+obj-$(CONFIG_DIRECT_CHARGING)   += sec_direct_charger_test.o

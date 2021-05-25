@@ -1093,6 +1093,28 @@
 		samsung,area = <1>;
 		samsung,offset = <0x21FD000>;
 	};
+
+	ext_bin_17: ext-bin@17 {
+		compatible = "samsung,abox-ext-bin";
+		samsung,name = "avsyncmix.bin";
+		samsung,area = <1>;
+		samsung,offset = <0x2341000>;
+	};
+
+	ext_bin_18: ext-bin@18 {
+		compatible = "samsung,abox-ext-bin";
+		samsung,name = "txse3.bin";
+		samsung,area = <1>;
+		samsung,offset = <0x257C000>;
+	};
+
+	ext_bin_19: ext-bin@19 {
+		compatible = "samsung,abox-ext-bin";
+		samsung,name = "APTV_AUDIO_SLSI.bin";
+		samsung,area = <1>;
+		samsung,offset = <0x6DA000>;
+		samsung,changable;
+	};
 };
 
 &abox_uaif_0 {

@@ -2154,10 +2154,6 @@
 		interrupts = <GIC_SPI INTREQ__SECURE_LOG IRQ_TYPE_LEVEL_HIGH>;
 	};
 
-	harxlog {
-		compatible = "samsung,exynos-harxlog";
-	};
-
 	secmem {
 		compatible = "samsung,exynos-secmem";
 		power-domains = <&pd_hsi0>;

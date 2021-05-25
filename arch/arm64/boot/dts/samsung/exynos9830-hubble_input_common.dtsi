@@ -115,5 +115,6 @@
 		sync-reportrate-120 = "Y";
 		support_fod;
 		support_vrr;
+		support_open_short_test;
 	};
 };
